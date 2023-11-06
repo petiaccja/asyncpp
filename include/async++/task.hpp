@@ -89,9 +89,16 @@ namespace impl_task {
 
     template <class T>
     struct sync_awaitable : basic_awaitable<T> {
-        void set_results(task_result<T> result) noexcept override { m_promise.set_value(std::move(result)); }
+        task_result<T> m_result;
+        promise<T>* m_awaited = nullptr;
         std::promise<task_result<T>> m_promise;
         std::future<task_result<T>> m_future = m_promise.get_future();
+
+        sync_awaitable(promise<T>* awaited) : m_awaited(awaited) {
+            m_awaited->set_awaiting(this);
+            m_awaited->resume();
+        }
+        void set_results(task_result<T> result) noexcept override { m_promise.set_value(std::move(result)); }
     };
 
 
@@ -121,14 +128,13 @@ public:
 
     T get() {
         assert(valid());
-        impl_task::sync_awaitable<T> awaitable;
-        m_promise->set_awaiting(&awaitable);
-        std::exchange(m_promise, nullptr)->resume();
+        impl_task::sync_awaitable<T> awaitable(std::exchange(m_promise, nullptr));
         return awaitable.m_future.get().get_or_throw();
     }
 
-    impl_task::awaitable<T> operator co_await() {
-        return { std::exchange(m_promise, nullptr) };
+    auto operator co_await() {
+        assert(valid());
+        return impl_task::awaitable<T>(std::exchange(m_promise, nullptr));
     }
 
     void set_scheduler(scheduler& scheduler) {
