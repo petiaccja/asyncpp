@@ -7,6 +7,7 @@ target_sources(test
 		test_generator.cpp
 		test_stream.cpp
 		test_scheduler.cpp	
+		test_eager_task.cpp
 )
 
 
