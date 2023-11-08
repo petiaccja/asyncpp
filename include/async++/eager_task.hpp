@@ -12,7 +12,7 @@ namespace asyncpp {
 
 
 template <class T>
-class task;
+class eager_task;
 
 
 namespace impl_eager_task {

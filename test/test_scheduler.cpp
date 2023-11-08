@@ -2,8 +2,10 @@
 #include <async++/scheduler.hpp>
 #include <async++/task.hpp>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <iostream>
 
 #include <catch2/catch_test_macros.hpp>
