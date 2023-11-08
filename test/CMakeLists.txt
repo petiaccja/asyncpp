@@ -8,6 +8,7 @@ target_sources(test
 		test_stream.cpp
 		test_scheduler.cpp	
 		test_eager_task.cpp
+		test_atomic_list.cpp
 )
 
 
