@@ -22,7 +22,7 @@ namespace impl {
     struct schedulable_promise {
         virtual ~schedulable_promise() = default;
         virtual std::coroutine_handle<> handle() = 0;
-        std::atomic<schedulable_promise*> m_next_in_schedule = nullptr;
+        schedulable_promise* m_scheduler_next = nullptr;
         scheduler* m_scheduler = nullptr;
     };
 

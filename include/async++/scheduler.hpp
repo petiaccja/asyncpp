@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include "atomic_list.hpp"
 #include "schedulable.hpp"
 
 #include <atomic>
@@ -19,28 +20,32 @@ public:
 
 
 class thread_pool : public scheduler {
-    struct state {
-        std::atomic<impl::schedulable_promise*> next_in_schedule = nullptr;
-        std::atomic_bool is_running = true;
-        std::condition_variable notifier;
-        std::mutex mtx;
-        std::atomic_flag pop_mtx;
+    struct worker_state {
+        atomic_list<impl::schedulable_promise, &impl::schedulable_promise::m_scheduler_next> m_work_items;
+        std::condition_variable m_notifier;
+        std::mutex m_notification_mutex;
+        worker_state* m_next;
+        const thread_pool* m_owner;
     };
 
 public:
     thread_pool(size_t num_threads = std::thread::hardware_concurrency());
-    thread_pool(thread_pool&&) = default;
-    thread_pool& operator=(thread_pool&&) = default;
-    ~thread_pool();
-    void schedule(impl::schedulable_promise& promise) override;
+    thread_pool(thread_pool&&) = delete;
+    thread_pool& operator=(thread_pool&&) = delete;
+    ~thread_pool() noexcept;
+    void schedule(impl::schedulable_promise& promise) noexcept override;
 
 private:
-    static void thread_function(std::shared_ptr<state> state_);
-    static impl::schedulable_promise* pop(state& state_);
+    void worker_function() noexcept;
+    void sync_worker_init() noexcept;
 
 private:
-    std::shared_ptr<state> m_state;
-    std::vector<std::thread> m_threads;
+    static thread_local worker_state m_worker_state;
+    std::vector<std::thread> m_worker_threads;
+    std::vector<std::atomic<worker_state*>> m_worker_states;
+    std::atomic_flag m_finished;
+    std::atomic_size_t m_worker_index = 0;
+    atomic_list<worker_state, &worker_state::m_next> m_free_workers;
 };
 
 
