@@ -2,7 +2,10 @@ add_library(async++)
 
 target_sources(async++
 	PRIVATE
-		scheduler.cpp
+		thread_pool.cpp
+		interleaving/runner.cpp
+		interleaving/sequencer.cpp
+		interleaving/state_tree.cpp
 )
 
 target_link_libraries(async++ async++-headers)

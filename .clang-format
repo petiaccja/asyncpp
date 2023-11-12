@@ -56,7 +56,7 @@ IncludeBlocks: Regroup
 IncludeCategories:
   - Regex:           '(<|")((C|c)atch.*)/'
     Priority:        5
-  - Regex:           '(<|")((Archive|Data|Specification|StorageDevice|TrustedPeripheral|Error).*)/'
+  - Regex:           '(<|")((async\+\+).*)/'
     Priority:        2
   - Regex:           '<([[:alnum:].]|_|/)+\..*>'
     Priority:        3

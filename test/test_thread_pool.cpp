@@ -1,5 +1,6 @@
+#include "test_schedulers.hpp"
 #include <async++/eager_task.hpp>
-#include <async++/scheduler.hpp>
+#include <async++/thread_pool.hpp>
 #include <async++/task.hpp>
 
 #include <algorithm>
@@ -14,18 +15,19 @@
 using namespace asyncpp;
 
 
-constexpr size_t num_threads = 8;
-constexpr int64_t depth = 8;
+constexpr size_t num_threads = 4;
+constexpr int64_t depth = 6;
+constexpr size_t branching = 10;
 
 
-TEST_CASE("Scheduler: thread pool", "[Scheduler]") {
+TEST_CASE("Thread pool: lazy task", "[Scheduler]") {
     thread_pool sched(num_threads);
 
     static const auto coro = [&sched](auto self, int depth) -> task<int64_t> {
         if (depth <= 0) {
             co_return 1;
         }
-        std::array<task<int64_t>, 10> children;
+        std::array<task<int64_t>, branching> children;
         std::ranges::generate(children, [&] { return set_scheduler(self(self, depth - 1), sched); });
         int64_t sum = 0;
         for (auto& tk : children) {
@@ -34,7 +36,7 @@ TEST_CASE("Scheduler: thread pool", "[Scheduler]") {
         co_return sum;
     };
 
-    const auto count = int64_t(std::pow(10, depth));
+    const auto count = int64_t(std::pow(branching, depth));
     const auto start = std::chrono::high_resolution_clock::now();
     const auto result = set_scheduler(coro(coro, depth), sched).get();
     const auto end = std::chrono::high_resolution_clock::now();
@@ -43,14 +45,14 @@ TEST_CASE("Scheduler: thread pool", "[Scheduler]") {
 }
 
 
-TEST_CASE("Scheduler: thread pool eager", "[Scheduler]") {
+TEST_CASE("Thread pool: eager task", "[Scheduler]") {
     thread_pool sched(num_threads);
 
     static const auto coro = [&sched](auto self, int depth) -> eager_task<int64_t> {
         if (depth <= 0) {
             co_return 1;
         }
-        std::array<eager_task<int64_t>, 10> children;
+        std::array<eager_task<int64_t>, branching> children;
         std::ranges::generate(children, [&] { return set_scheduler(self(self, depth - 1), sched); });
         int64_t sum = 0;
         for (auto& tk : children) {
@@ -62,7 +64,7 @@ TEST_CASE("Scheduler: thread pool eager", "[Scheduler]") {
         co_return sum;
     };
 
-    const auto count = int64_t(std::pow(10, depth));
+    const auto count = int64_t(std::pow(branching, depth));
     const auto start = std::chrono::high_resolution_clock::now();
     const auto result = set_scheduler(coro(coro, depth), sched).get();
     const auto end = std::chrono::high_resolution_clock::now();

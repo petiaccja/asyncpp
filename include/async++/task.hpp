@@ -27,8 +27,12 @@ namespace impl_task {
     struct promise_result {
         task_result<T> m_result;
 
-        void unhandled_exception() noexcept { m_result = std::current_exception(); }
-        void return_value(T value) noexcept { m_result = std::forward<T>(value); }
+        void unhandled_exception() noexcept {
+            m_result = std::current_exception();
+        }
+        void return_value(T value) noexcept {
+            m_result = std::forward<T>(value);
+        }
     };
 
 
@@ -36,8 +40,12 @@ namespace impl_task {
     struct promise_result<void> {
         task_result<void> m_result;
 
-        void unhandled_exception() noexcept { m_result = std::current_exception(); }
-        void return_void() noexcept { m_result = nullptr; }
+        void unhandled_exception() noexcept {
+            m_result = std::current_exception();
+        }
+        void return_void() noexcept {
+            m_result = nullptr;
+        }
     };
 
 
@@ -50,17 +58,12 @@ namespace impl_task {
         void resume() override { return m_scheduler ? m_scheduler->schedule(*this) : handle().resume(); }
         auto handle() -> std::coroutine_handle<> override { return std::coroutine_handle<promise>::from_promise(*this); }
         auto final_suspend() noexcept {
-            forward_results();
+            m_awaiting->on_ready(std::move(this->m_result));
             return std::suspend_never{};
         }
         void set_awaiting(basic_awaitable<T>* awaiting) {
             const auto previous = std::exchange(m_awaiting, awaiting);
             assert(previous == nullptr && "only one entity should ever await this promise");
-        }
-        void forward_results() noexcept {
-            const auto awaiting = std::exchange(m_awaiting, nullptr);
-            assert(awaiting != nullptr && "lazy task must have someone awaiting it");
-            awaiting->set_results(std::move(this->m_result));
         }
     };
 
@@ -81,7 +84,7 @@ namespace impl_task {
             m_awaited->resume();
         }
 
-        void set_results(task_result<T> result) noexcept override {
+        void on_ready(task_result<T> result) noexcept override {
             m_result = std::move(result);
             m_enclosing->resume();
         }
@@ -90,7 +93,6 @@ namespace impl_task {
 
     template <class T>
     struct sync_awaitable : basic_awaitable<T> {
-        task_result<T> m_result;
         promise<T>* m_awaited = nullptr;
         std::promise<task_result<T>> m_promise;
         std::future<task_result<T>> m_future = m_promise.get_future();
@@ -99,7 +101,9 @@ namespace impl_task {
             m_awaited->set_awaiting(this);
             m_awaited->resume();
         }
-        void set_results(task_result<T> result) noexcept override { m_promise.set_value(std::move(result)); }
+        void on_ready(task_result<T> result) noexcept override {
+            m_promise.set_value(std::move(result));
+        }
     };
 
 
