@@ -13,10 +13,10 @@ namespace asyncpp {
 
 
 template <class T>
-class eager_task;
+class async_task;
 
 
-namespace impl_eager_task {
+namespace impl_async_task {
 
     using namespace impl;
     using impl_task::promise_result;
@@ -46,7 +46,7 @@ namespace impl_eager_task {
         };
 
         auto get_return_object() {
-            return eager_task<T>(this);
+            return async_task<T>(this);
         }
 
         constexpr auto initial_suspend() noexcept {
@@ -166,31 +166,31 @@ namespace impl_eager_task {
     };
 
 
-} // namespace impl_eager_task
+} // namespace impl_async_task
 
 
 template <class T>
-class [[nodiscard]] eager_task {
+class [[nodiscard]] async_task {
 public:
-    using promise_type = impl_eager_task::promise<T>;
+    using promise_type = impl_async_task::promise<T>;
 
-    eager_task() = default;
-    eager_task(const eager_task& rhs) = delete;
-    eager_task& operator=(const eager_task& rhs) = delete;
-    eager_task(eager_task&& rhs) noexcept : m_promise(std::exchange(rhs.m_promise, nullptr)) {}
-    eager_task& operator=(eager_task&& rhs) noexcept {
+    async_task() = default;
+    async_task(const async_task& rhs) = delete;
+    async_task& operator=(const async_task& rhs) = delete;
+    async_task(async_task&& rhs) noexcept : m_promise(std::exchange(rhs.m_promise, nullptr)) {}
+    async_task& operator=(async_task&& rhs) noexcept {
         release();
         m_promise = std::exchange(rhs.m_promise, nullptr);
         return *this;
     }
-    eager_task(promise_type* promise) : m_promise(promise) {}
-    ~eager_task() { release(); }
+    async_task(promise_type* promise) : m_promise(promise) {}
+    ~async_task() { release(); }
 
     bool valid() const {
         return m_promise != nullptr;
     }
 
-    void start() {
+    void launch() {
         assert(valid());
         m_promise->start();
     }
@@ -202,13 +202,13 @@ public:
 
     T get() {
         assert(valid());
-        impl_eager_task::sync_awaitable<T> awaitable(std::exchange(m_promise, nullptr));
+        impl_async_task::sync_awaitable<T> awaitable(std::exchange(m_promise, nullptr));
         return INTERLEAVED_ACQUIRE(awaitable.m_future.get()).get_or_throw();
     }
 
     auto operator co_await() {
         assert(valid());
-        return impl_eager_task::awaitable<T>(std::exchange(m_promise, nullptr));
+        return impl_async_task::awaitable<T>(std::exchange(m_promise, nullptr));
     }
 
     void set_scheduler(scheduler& scheduler) {

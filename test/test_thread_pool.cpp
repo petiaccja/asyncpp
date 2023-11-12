@@ -1,5 +1,5 @@
 #include "test_schedulers.hpp"
-#include <async++/eager_task.hpp>
+#include <async++/async_task.hpp>
 #include <async++/thread_pool.hpp>
 #include <async++/task.hpp>
 
@@ -45,18 +45,18 @@ TEST_CASE("Thread pool: lazy task", "[Scheduler]") {
 }
 
 
-TEST_CASE("Thread pool: eager task", "[Scheduler]") {
+TEST_CASE("Thread pool: async task", "[Scheduler]") {
     thread_pool sched(num_threads);
 
-    static const auto coro = [&sched](auto self, int depth) -> eager_task<int64_t> {
+    static const auto coro = [&sched](auto self, int depth) -> async_task<int64_t> {
         if (depth <= 0) {
             co_return 1;
         }
-        std::array<eager_task<int64_t>, branching> children;
+        std::array<async_task<int64_t>, branching> children;
         std::ranges::generate(children, [&] { return set_scheduler(self(self, depth - 1), sched); });
         int64_t sum = 0;
         for (auto& tk : children) {
-            tk.start();
+            tk.launch();
         }
         for (auto& tk : children) {
             sum += co_await tk;

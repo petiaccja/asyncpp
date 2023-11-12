@@ -7,7 +7,7 @@ target_sources(test
 		test_generator.cpp
 		#test_stream.cpp
 		test_thread_pool.cpp
-		test_eager_task.cpp
+		test_async_task.cpp
 		test_atomic_list.cpp
 		interleaving/test_runner.cpp
 )
