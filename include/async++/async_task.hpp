@@ -47,8 +47,7 @@ namespace impl_async_task {
             return async_task<T>(this);
         }
 
-        constexpr auto initial_suspend() noexcept {
-            INTERLEAVED(m_state.store(CREATED));
+        constexpr auto initial_suspend() const noexcept {
             return std::suspend_always{};
         }
 
@@ -61,10 +60,12 @@ namespace impl_async_task {
         }
 
         bool await(basic_awaitable<T>* awaiter) noexcept {
-            const auto state = INTERLEAVED(m_state.exchange(awaiter));
+            auto state = INTERLEAVED(m_state.exchange(awaiter));
             assert(state == CREATED || state == RUNNING || state == READY);
             if (state == CREATED) {
+                INTERLEAVED(m_state.store(RUNNING));
                 resume();
+                state = INTERLEAVED(m_state.exchange(awaiter));
             }
             if (state == READY) {
                 INTERLEAVED(m_state.store(READY));
@@ -107,7 +108,7 @@ namespace impl_async_task {
         static inline const auto RUNNING = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 13);
         static inline const auto READY = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 12);
         static inline const auto RELEASED = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 11);
-        std::atomic<basic_awaitable<T>*> m_state = nullptr;
+        std::atomic<basic_awaitable<T>*> m_state = CREATED;
     };
 
 
