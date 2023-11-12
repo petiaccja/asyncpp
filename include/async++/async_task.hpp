@@ -1,12 +1,12 @@
 #pragma once
 
+#include "awaitable.hpp"
 #include "interleaving/sequence_point.hpp"
-#include "task.hpp"
+#include "promise.hpp"
 
 #include <cassert>
 #include <coroutine>
 #include <future>
-#include <optional>
 
 
 namespace asyncpp {
@@ -19,11 +19,9 @@ class async_task;
 namespace impl_async_task {
 
     using namespace impl;
-    using impl_task::promise_result;
-
 
     template <class T>
-    struct promise : promise_result<T>, resumable_promise, schedulable_promise {
+    struct promise : return_promise<T>, resumable_promise, schedulable_promise {
         struct final_awaitable {
             constexpr bool await_ready() const noexcept { return false; }
             bool await_suspend(std::coroutine_handle<promise> handle) const noexcept {

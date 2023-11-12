@@ -1,6 +1,6 @@
 #pragma once
 
-#include <async++/schedulable.hpp>
+#include <async++/promise.hpp>
 #include <async++/scheduler.hpp>
 #include <async++/sync/atomic_list.hpp>
 

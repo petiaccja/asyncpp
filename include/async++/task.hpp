@@ -1,7 +1,7 @@
 #pragma once
 
 #include "awaitable.hpp"
-#include "schedulable.hpp"
+#include "promise.hpp"
 #include "scheduler.hpp"
 
 #include <cassert>
@@ -24,33 +24,7 @@ namespace impl_task {
 
 
     template <class T>
-    struct promise_result {
-        task_result<T> m_result;
-
-        void unhandled_exception() noexcept {
-            m_result = std::current_exception();
-        }
-        void return_value(T value) noexcept {
-            m_result = std::forward<T>(value);
-        }
-    };
-
-
-    template <>
-    struct promise_result<void> {
-        task_result<void> m_result;
-
-        void unhandled_exception() noexcept {
-            m_result = std::current_exception();
-        }
-        void return_void() noexcept {
-            m_result = nullptr;
-        }
-    };
-
-
-    template <class T>
-    struct promise : promise_result<T>, resumable_promise, schedulable_promise {
+    struct promise : return_promise<T>, resumable_promise, schedulable_promise {
         basic_awaitable<T>* m_awaiting = nullptr;
 
         auto get_return_object() { return task<T>(this); }
