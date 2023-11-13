@@ -1,9 +1,10 @@
 #pragma once
 
+#include "awaitable.hpp"
+
 #include <cassert>
 #include <coroutine>
 #include <exception>
-#include <optional>
 
 
 namespace asyncpp {
@@ -15,24 +16,39 @@ class generator;
 
 namespace impl_generator {
 
+    using namespace impl;
+
     template <class T>
     struct promise {
-        using storage_type = std::conditional_t<std::is_reference_v<T>, std::reference_wrapper<std::remove_reference_t<T>>, T>;
+        auto get_return_object() noexcept {
+            return generator<T>(this);
+        }
 
-        promise() = default;
+        constexpr auto initial_suspend() const noexcept {
+            return std::suspend_never{};
+        }
 
-        auto get_return_object() noexcept { return generator<T>(this); }
-        constexpr auto initial_suspend() const noexcept { return std::suspend_never{}; }
-        constexpr auto final_suspend() const noexcept { return std::suspend_always{}; }
-        void unhandled_exception() noexcept { m_error = std::current_exception(); }
-        void return_void() noexcept {}
-        auto yield_value(storage_type value) noexcept {
-            m_current_value = std::move(value);
+        constexpr auto final_suspend() const noexcept {
             return std::suspend_always{};
         }
 
-        std::optional<storage_type> m_current_value;
-        std::optional<std::exception_ptr> m_error;
+        void unhandled_exception() noexcept {
+            m_result = std::current_exception();
+        }
+
+        void return_void() noexcept {}
+
+        auto yield_value(T value) noexcept {
+            m_result = std::forward<T>(value);
+            return std::suspend_always{};
+        }
+
+        task_result<T>& get_result() {
+            return m_result;
+        }
+
+    private:
+        task_result<T> m_result;
     };
 
     template <class T>
@@ -50,10 +66,7 @@ namespace impl_generator {
 
         reference operator*() const {
             assert(valid() && "iterator not dereferencable");
-            if (m_promise->m_error) {
-                std::rethrow_exception(*m_promise->m_error);
-            }
-            return *m_promise->m_current_value;
+            return m_promise->get_result().get_or_throw();
         }
 
         iterator& operator++() {

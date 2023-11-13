@@ -183,7 +183,7 @@ public:
         if (!result.has_value()) {
             return std::nullopt;
         }
-        return result.get_or_throw();
+        return { std::forward<T>(result.get_or_throw()) };
     }
 
     auto operator co_await() const {

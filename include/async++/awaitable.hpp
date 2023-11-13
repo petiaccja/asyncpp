@@ -12,6 +12,7 @@ namespace impl {
     struct task_result {
         using wrapper_type = std::conditional_t<std::is_reference_v<T>, std::reference_wrapper<std::remove_reference_t<T>>, T>;
         using value_type = std::conditional_t<std::is_void_v<T>, std::nullptr_t, wrapper_type>;
+        using reference = std::conditional_t<std::is_void_v<T>, void, std::add_lvalue_reference_t<T>>;
 
         std::optional<std::variant<value_type, std::exception_ptr>> m_result;
 
@@ -33,12 +34,12 @@ namespace impl {
             return m_result.has_value();
         }
 
-        T get_or_throw() {
-            auto value = m_result.value(); // Throws if empty.
+        reference get_or_throw() {
+            auto& value = m_result.value(); // Throws if empty.
             if (std::holds_alternative<std::exception_ptr>(value)) {
                 std::rethrow_exception(std::get<std::exception_ptr>(value));
             }
-            return T(std::get<value_type>(value));
+            return static_cast<reference>(std::get<value_type>(value));
         }
     };
 
