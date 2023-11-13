@@ -53,6 +53,47 @@ namespace impl {
         }
     };
 
-
 } // namespace impl
+
+
+struct resumer_coroutine_object;
+
+
+struct resumer_coroutine_promise {
+    impl::resumable_promise& m_promise;
+
+    resumer_coroutine_promise(impl::resumable_promise& promise) : m_promise(promise) {}
+
+    auto get_return_object() noexcept {
+        return std::coroutine_handle<resumer_coroutine_promise>::from_promise(*this);
+    }
+
+    constexpr auto initial_suspend() const noexcept {
+        return std::suspend_always{};
+    }
+
+    constexpr void return_void() const noexcept {}
+
+    void unhandled_exception() const noexcept {
+        std::terminate();
+    }
+
+    constexpr auto final_suspend() const noexcept {
+        return std::suspend_never{};
+    }
+};
+
+
+struct resumer_coroutine_handle : std::coroutine_handle<resumer_coroutine_promise> {
+    resumer_coroutine_handle(std::coroutine_handle<resumer_coroutine_promise> handle)
+        : std::coroutine_handle<resumer_coroutine_promise>(handle) {}
+    using promise_type = resumer_coroutine_promise;
+};
+
+
+inline resumer_coroutine_handle resumer_coroutine(impl::resumable_promise& promise) {
+    promise.resume();
+    co_return;
+}
+
 } // namespace asyncpp
