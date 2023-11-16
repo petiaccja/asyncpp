@@ -1,6 +1,5 @@
 #include <async++/interleaving/runner.hpp>
 #include <async++/interleaving/sequence_point.hpp>
-#include <async++/task.hpp>
 
 #include <functional>
 
