@@ -2,7 +2,7 @@
 
 
 #include "scheduler.hpp"
-#include "sync/atomic_list.hpp"
+#include "sync/atomic_stack.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -27,7 +27,7 @@ class thread_pool : public scheduler {
         void wait() const;
 
     private:
-        atomic_list<impl::schedulable_promise, &impl::schedulable_promise::m_scheduler_next> m_work_items;
+        atomic_stack<impl::schedulable_promise, &impl::schedulable_promise::m_scheduler_next> m_work_items;
         mutable std::condition_variable m_wake_cv;
         mutable std::mutex m_wake_mutex;
         std::atomic_flag m_terminated;
@@ -47,7 +47,7 @@ private:
 private:
     std::vector<std::jthread> m_os_threads;
     std::vector<std::shared_ptr<worker>> m_workers;
-    atomic_list<worker, &worker::m_next> m_free_workers;
+    atomic_stack<worker, &worker::m_next> m_free_workers;
 
     static thread_local std::shared_ptr<worker> local_worker;
     static thread_local thread_pool* local_owner;

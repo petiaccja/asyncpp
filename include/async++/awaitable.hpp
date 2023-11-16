@@ -47,7 +47,7 @@ namespace impl {
     template <class T>
     struct basic_awaitable {
         virtual ~basic_awaitable() = default;
-        virtual void on_ready(task_result<T> result) noexcept = 0;
+        virtual void on_ready() noexcept = 0;
     };
 
 

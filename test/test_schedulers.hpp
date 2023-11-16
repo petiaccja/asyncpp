@@ -2,7 +2,7 @@
 
 #include <async++/promise.hpp>
 #include <async++/scheduler.hpp>
-#include <async++/sync/atomic_list.hpp>
+#include <async++/sync/atomic_stack.hpp>
 
 #include <cassert>
 
@@ -37,5 +37,5 @@ public:
     }
 
 private:
-    asyncpp::atomic_list<asyncpp::impl::schedulable_promise, &asyncpp::impl::schedulable_promise::m_scheduler_next> m_items;
+    asyncpp::atomic_stack<asyncpp::impl::schedulable_promise, &asyncpp::impl::schedulable_promise::m_scheduler_next> m_items;
 };

@@ -36,7 +36,7 @@ namespace impl_stream {
                 const auto state = INTERLEAVED(owner.m_state.exchange(READY));
                 assert(state != STOPPED && state != READY);
                 if (state != RUNNING) {
-                    state->on_ready(std::move(owner.m_result));
+                    state->on_ready();
                 }
             }
 
@@ -132,8 +132,8 @@ namespace impl_stream {
             return m_result.get_or_throw();
         }
 
-        void on_ready(task_result<T> result) noexcept override {
-            m_result = std::move(result);
+        void on_ready() noexcept final {
+            m_result = m_awaited->get_result();
             m_enclosing->resume();
         }
     };
@@ -141,14 +141,15 @@ namespace impl_stream {
 
     template <class T>
     struct sync_awaitable : basic_awaitable<T> {
-        sync_awaitable(promise<T>* awaited) noexcept {
+        promise<T>* m_awaited;
+        sync_awaitable(promise<T>* awaited) noexcept : m_awaited(awaited) {
             const bool ready = awaited->await(this);
             if (ready) {
                 m_promise.set_value(awaited->get_result());
             }
         }
-        void on_ready(task_result<T> result) noexcept override {
-            m_promise.set_value(std::move(result));
+        void on_ready() noexcept final {
+            m_promise.set_value(m_awaited->get_result());
         }
         std::promise<task_result<T>> m_promise;
         std::future<task_result<T>> m_future = m_promise.get_future();

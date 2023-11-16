@@ -35,8 +35,7 @@ namespace impl_async_task {
                     return false;
                 }
                 else {
-                    auto result = owner.get_result();
-                    state->on_ready(std::move(result));
+                    state->on_ready();
                     return false;
                 }
             }
@@ -120,7 +119,7 @@ namespace impl_async_task {
 
         awaitable(promise<T>* awaited) : m_awaited(awaited) {}
 
-        bool await_ready() const noexcept {
+        constexpr bool await_ready() const noexcept {
             return false;
         }
 
@@ -139,8 +138,8 @@ namespace impl_async_task {
             return std::forward<T>(m_result.get_or_throw());
         }
 
-        void on_ready(task_result<T> result) noexcept final {
-            m_result = std::move(result);
+        void on_ready() noexcept final {
+            m_result = m_awaited->get_result();
             m_enclosing->resume();
         }
     };
@@ -159,8 +158,8 @@ namespace impl_async_task {
                 m_awaited->release();
             }
         }
-        void on_ready(task_result<T> result) noexcept final {
-            return m_promise.set_value(std::move(result));
+        void on_ready() noexcept final {
+            return m_promise.set_value(m_awaited->get_result());
         }
     };
 

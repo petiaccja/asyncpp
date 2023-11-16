@@ -8,7 +8,7 @@
 namespace asyncpp {
 
 template <class Element, Element* Element::*next>
-class atomic_list {
+class atomic_stack {
 public:
     Element* push(Element* element) noexcept {
         std::lock_guard lk(m_mtx);

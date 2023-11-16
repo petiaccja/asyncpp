@@ -1,8 +1,8 @@
 #include "leak_tester.hpp"
 #include "test_schedulers.hpp"
 
-#include <async++/async_task.hpp>
 #include <async++/interleaving/runner.hpp>
+#include <async++/shared_task.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -10,15 +10,17 @@
 using namespace asyncpp;
 
 
-TEST_CASE("Async task: interleaving sync", "[Async task]") {
-    static const auto do_task = [](leak_tester value) -> async_task<int> { co_return 3; };
-
-    struct fixture {
-        thread_locked_scheduler sched;
-        async_task<int> task;
+TEST_CASE("Shared task: interleave sync", "[Shared task]") {
+    static const auto do_task = [](leak_tester) -> shared_task<void> {
+        co_return;
     };
 
     leak_tester tester;
+
+    struct fixture {
+        thread_locked_scheduler sched;
+        shared_task<void> task;
+    };
 
     auto make_fixture = [&tester] {
         auto f = std::make_shared<fixture>();
@@ -37,7 +39,8 @@ TEST_CASE("Async task: interleaving sync", "[Async task]") {
 
     auto gen = interleaving::run_all(std::function(make_fixture),
                                      std::vector{ std::function(sync_thread), std::function(task_thread) },
-                                     { "$sync", "$task" });
+                                     { "$sync_1", "$task" });
+
     size_t count = 0;
     for ([[maybe_unused]] const auto& il : gen) {
         ++count;
@@ -48,11 +51,11 @@ TEST_CASE("Async task: interleaving sync", "[Async task]") {
 }
 
 
-TEST_CASE("Async task: interleaving co_await", "[Async task]") {
-    static const auto do_worker_task = [](leak_tester tester) -> async_task<int> {
+TEST_CASE("Shared task: interleaving co_await", "[Shared task]") {
+    static const auto do_worker_task = [](leak_tester tester) -> shared_task<int> {
         co_return 3;
     };
-    static const auto do_main_task = [](async_task<int> task) -> async_task<int> {
+    static const auto do_main_task = [](shared_task<int> task) -> shared_task<int> {
         task.launch();
         co_return co_await task;
     };
@@ -60,7 +63,7 @@ TEST_CASE("Async task: interleaving co_await", "[Async task]") {
     struct fixture {
         thread_locked_scheduler worker_sched;
         thread_locked_scheduler main_sched;
-        async_task<int> main_task;
+        shared_task<int> main_task;
     };
 
     leak_tester tester;
@@ -98,12 +101,12 @@ TEST_CASE("Async task: interleaving co_await", "[Async task]") {
 }
 
 
-TEST_CASE("Async task: interleaving abandon", "[Async task]") {
-    static const auto do_task = [](leak_tester value) -> async_task<int> { co_return 3; };
+TEST_CASE("Shared task: interleaving abandon", "[Shared task]") {
+    static const auto do_task = [](leak_tester value) -> shared_task<int> { co_return 3; };
 
     struct fixture {
         thread_locked_scheduler sched;
-        async_task<int> task;
+        shared_task<int> task;
     };
 
     leak_tester tester;
@@ -136,39 +139,43 @@ TEST_CASE("Async task: interleaving abandon", "[Async task]") {
 }
 
 
-TEST_CASE("Async task: get value", "[Async task]") {
-    static const auto coro = [](int value) -> async_task<int> {
+TEST_CASE("Shared task: get value", "[Shared task]") {
+    static const auto coro = [](int value) -> shared_task<int> {
         co_return value;
     };
-    REQUIRE(coro(42).get() == 42);
+    auto task = coro(1);
+    REQUIRE(task.get() == 1);
+    REQUIRE(task.get() == 1); // Should be possible to get a second time too.
 }
 
 
-TEST_CASE("Async task: co_await value", "[Async task]") {
-    static const auto coro = [](int value) -> async_task<int> {
+TEST_CASE("Shared task: get ref", "[Shared task]") {
+    static const auto coro = [](int& value) -> shared_task<int&> {
         co_return value;
     };
-    static const auto enclosing = [](int value) -> async_task<int> {
+    int value = 1;
+    auto task = coro(value);
+    REQUIRE(&task.get() == &value);
+}
+
+
+TEST_CASE("Shared task: co_await value", "[Shared task]") {
+    static const auto coro = [](int value) -> shared_task<int> {
+        co_return value;
+    };
+    static const auto enclosing = [](int value) -> shared_task<int> {
         co_return co_await coro(value);
     };
     REQUIRE(enclosing(42).get() == 42);
 }
 
 
-TEST_CASE("Async task: get ref", "[Async task]") {
-    static const auto coro = [](int value) -> async_task<int> {
-        co_return value;
-    };
-    REQUIRE(coro(42).get() == 42);
-}
-
-
-TEST_CASE("Async task: co_await ref", "[Async task]") {
+TEST_CASE("Shared task: co_await ref", "[Shared task]") {
     static int value = 42;
-    static const auto coro = [](int& value) -> async_task<int&> {
+    static const auto coro = [](int& value) -> shared_task<int&> {
         co_return value;
     };
-    static const auto enclosing = [](int& value) -> async_task<int&> {
+    static const auto enclosing = [](int& value) -> shared_task<int&> {
         co_return co_await coro(value);
     };
     auto task = enclosing(value);

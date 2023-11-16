@@ -32,12 +32,15 @@ namespace impl_task {
         void resume() override { return m_scheduler ? m_scheduler->schedule(*this) : handle().resume(); }
         auto handle() -> std::coroutine_handle<> override { return std::coroutine_handle<promise>::from_promise(*this); }
         auto final_suspend() noexcept {
-            m_awaiting->on_ready(std::move(this->m_result));
+            m_awaiting->on_ready();
             return std::suspend_never{};
         }
         void set_awaiting(basic_awaitable<T>* awaiting) {
             const auto previous = std::exchange(m_awaiting, awaiting);
             assert(previous == nullptr && "only one entity should ever await this promise");
+        }
+        auto get_result() noexcept {
+            return std::move(this->m_result);
         }
     };
 
@@ -58,8 +61,8 @@ namespace impl_task {
             m_awaited->resume();
         }
 
-        void on_ready(task_result<T> result) noexcept override {
-            m_result = std::move(result);
+        void on_ready() noexcept override {
+            m_result = m_awaited->get_result();
             m_enclosing->resume();
         }
     };
@@ -75,8 +78,8 @@ namespace impl_task {
             m_awaited->set_awaiting(this);
             m_awaited->resume();
         }
-        void on_ready(task_result<T> result) noexcept override {
-            m_promise.set_value(std::move(result));
+        void on_ready() noexcept override {
+            m_promise.set_value(m_awaited->get_result());
         }
     };
 

@@ -8,8 +8,10 @@ target_sources(test
 		test_stream.cpp
 		test_thread_pool.cpp
 		test_async_task.cpp
-		test_atomic_list.cpp
+		test_atomic_stack.cpp
 		interleaving/test_runner.cpp
+		test_shared_task.cpp
+		test_atomic_collection.cpp
 )
 
 
