@@ -209,7 +209,7 @@ public:
         return impl_task::awaitable<T>(std::exchange(m_promise, nullptr));
     }
 
-    void set_scheduler(scheduler& scheduler) {
+    void bind(scheduler& scheduler) {
         if (m_promise) {
             m_promise->m_scheduler = &scheduler;
         }

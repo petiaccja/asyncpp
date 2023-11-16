@@ -28,11 +28,8 @@ TEST_CASE("Thread pool: perf test", "[Scheduler]") {
             co_return 1;
         }
         std::array<task<int64_t>, branching> children;
-        std::ranges::generate(children, [&] { return set_scheduler(self(self, depth - 1), sched); });
+        std::ranges::generate(children, [&] { return launch(self(self, depth - 1), sched); });
         int64_t sum = 0;
-        for (auto& tk : children) {
-            tk.launch();
-        }
         for (auto& tk : children) {
             sum += co_await tk;
         }
@@ -41,7 +38,7 @@ TEST_CASE("Thread pool: perf test", "[Scheduler]") {
 
     const auto count = int64_t(std::pow(branching, depth));
     const auto start = std::chrono::high_resolution_clock::now();
-    const auto result = set_scheduler(coro(coro, depth), sched).get();
+    const auto result = bind(coro(coro, depth), sched).get();
     const auto end = std::chrono::high_resolution_clock::now();
     std::cout << "performance: " << 1e9 * double(count) / std::chrono::nanoseconds(end - start).count() << " / s" << std::endl;
     REQUIRE(result == count);

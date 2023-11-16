@@ -244,7 +244,7 @@ public:
         return impl_shared_task::awaitable<T>(m_promise);
     }
 
-    void set_scheduler(scheduler& scheduler) {
+    void bind(scheduler& scheduler) {
         if (m_promise) {
             m_promise->m_scheduler = &scheduler;
         }

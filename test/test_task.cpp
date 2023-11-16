@@ -23,7 +23,7 @@ TEST_CASE("Task: interleaving sync", "[Task]") {
     auto make_fixture = [&tester] {
         auto f = std::make_shared<fixture>();
         f->task = do_task(tester);
-        set_scheduler(f->task, f->sched);
+        bind(f->task, f->sched);
         return f;
     };
 
@@ -68,9 +68,9 @@ TEST_CASE("Task: interleaving co_await", "[Task]") {
     auto make_fixture = [&tester] {
         auto f = std::make_shared<fixture>();
         auto worker_task = do_worker_task(tester);
-        set_scheduler(worker_task, f->worker_sched);
+        bind(worker_task, f->worker_sched);
         f->main_task = do_main_task(std::move(worker_task));
-        f->main_task.set_scheduler(f->main_sched);
+        f->main_task.bind(f->main_sched);
         return f;
     };
 
@@ -111,7 +111,7 @@ TEST_CASE("Task: interleaving abandon", "[Task]") {
     auto make_fixture = [&tester] {
         auto f = std::make_shared<fixture>();
         f->task = do_task(tester);
-        set_scheduler(f->task, f->sched);
+        bind(f->task, f->sched);
         return f;
     };
 
