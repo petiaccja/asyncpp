@@ -183,3 +183,16 @@ TEST_CASE("Shared task: co_await ref", "[Shared task]") {
     REQUIRE(result == 42);
     REQUIRE(&result == &value);
 }
+
+
+TEST_CASE("Shared task: co_await void", "[Shared task]") {
+    static int value = 42;
+    static const auto coro = []() -> shared_task<void> {
+        co_return;
+    };
+    static const auto enclosing = []() -> shared_task<void> {
+        co_await coro();
+    };
+    auto task = enclosing();
+    task.get();
+}

@@ -6,20 +6,20 @@
 using namespace asyncpp;
 
 
-struct collection_element {
+struct queue_element {
     int id = 0;
-    collection_element* next = nullptr;
+    queue_element* next = nullptr;
 };
 
-using stack_t = atomic_stack<collection_element, &collection_element::next>;
+using queue_t = atomic_stack<queue_element, &queue_element::next>;
 
 
-TEST_CASE("Atomic list: all", "[Atomic list]") {
-    collection_element e0{ .id = 0 };
-    collection_element e1{ .id = 1 };
-    collection_element e2{ .id = 2 };
-    collection_element e3{ .id = 3 };
-    stack_t stack;
+TEST_CASE("Atomic stack: all", "[Atomic stack]") {
+    queue_element e0{ .id = 0 };
+    queue_element e1{ .id = 1 };
+    queue_element e2{ .id = 2 };
+    queue_element e3{ .id = 3 };
+    queue_t stack;
     REQUIRE(stack.empty());
     REQUIRE(stack.pop() == nullptr);
     REQUIRE(stack.push(&e0) == nullptr);

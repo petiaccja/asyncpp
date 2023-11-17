@@ -137,7 +137,12 @@ namespace impl_task {
                 m_result = m_awaited->get_result();
                 m_awaited->release();
             }
-            return std::forward<T>(m_result.get_or_throw());
+            if constexpr (!std::is_void_v<T>) {
+                return std::forward<T>(m_result.get_or_throw());
+            }
+            else {
+                m_result.get_or_throw();
+            }
         }
 
         void on_ready() noexcept final {
@@ -203,7 +208,12 @@ public:
     T get() {
         assert(valid());
         impl_task::sync_awaitable<T> awaitable(std::exchange(m_promise, nullptr));
-        return std::forward<T>(INTERLEAVED_ACQUIRE(awaitable.m_future.get()).get_or_throw());
+        if constexpr (!std::is_void_v<T>) {
+            return std::forward<T>(INTERLEAVED_ACQUIRE(awaitable.m_future.get()).get_or_throw());
+        }
+        else {
+            INTERLEAVED_ACQUIRE(awaitable.m_future.get()).get_or_throw();
+        }
     }
 
     auto operator co_await() {

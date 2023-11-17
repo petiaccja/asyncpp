@@ -161,21 +161,21 @@ namespace impl_shared_task {
     template <class T>
     struct sync_awaitable : chained_awaitable<T> {
         promise<T>* m_awaited = nullptr;
-        std::promise<task_result<T>&> m_promise;
-        std::future<task_result<T>&> m_future = m_promise.get_future();
+        std::promise<task_result<T>*> m_promise;
+        std::future<task_result<T>*> m_future = m_promise.get_future();
 
         sync_awaitable(promise<T>* awaited) noexcept : m_awaited(awaited) {
             m_awaited->acquire();
             const bool ready = m_awaited->await(this);
             if (ready) {
-                m_promise.set_value(m_awaited->get_result());
+                m_promise.set_value(&m_awaited->get_result());
             }
         }
         ~sync_awaitable() override {
             m_awaited->release();
         }
         void on_ready() noexcept final {
-            return m_promise.set_value(m_awaited->get_result());
+            return m_promise.set_value(&m_awaited->get_result());
         }
     };
 
@@ -237,7 +237,7 @@ public:
     auto get() const -> typename impl::task_result<T>::reference {
         assert(valid());
         impl_shared_task::sync_awaitable<T> awaitable(m_promise);
-        return INTERLEAVED_ACQUIRE(awaitable.m_future.get()).get_or_throw();
+        return INTERLEAVED_ACQUIRE(awaitable.m_future.get())->get_or_throw();
     }
 
     auto operator co_await() const {

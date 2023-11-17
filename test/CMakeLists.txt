@@ -7,10 +7,12 @@ target_sources(test
 		test_stream.cpp
 		test_thread_pool.cpp
 		test_task.cpp
-		test_atomic_stack.cpp
+		test_mutex.cpp
 		interleaving/test_runner.cpp
 		test_shared_task.cpp
-		test_atomic_collection.cpp
+		container/test_atomic_queue.cpp
+		container/test_atomic_stack.cpp
+		container/test_atomic_collection.cpp
 )
 
 

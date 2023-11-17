@@ -176,3 +176,16 @@ TEST_CASE("Task: co_await ref", "[Task]") {
     REQUIRE(result == 42);
     REQUIRE(&result == &value);
 }
+
+
+TEST_CASE("Task: co_await/get void", "[Task]") {
+    static int value = 42;
+    static const auto coro = [](int& value) -> task<void> {
+        co_return;
+    };
+    static const auto enclosing = [](int& value) -> task<void> {
+        co_await coro(value);
+    };
+    auto task = enclosing(value);
+    task.get();
+}
