@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spinlock.hpp"
+#include "../sync/spinlock.hpp"
 
 #include <mutex>
 

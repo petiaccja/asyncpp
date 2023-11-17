@@ -3,10 +3,12 @@
 #include "awaitable.hpp"
 #include "interleaving/sequence_point.hpp"
 #include "promise.hpp"
+#include "scheduler.hpp"
 
 #include <cassert>
 #include <coroutine>
 #include <future>
+#include <utility>
 
 
 namespace asyncpp {
@@ -164,7 +166,7 @@ namespace impl_task {
     };
 
 
-} // namespace impl_async_task
+} // namespace impl_task
 
 
 template <class T>

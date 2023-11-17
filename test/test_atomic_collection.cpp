@@ -1,4 +1,4 @@
-#include <async++/sync/atomic_collection.hpp>
+#include <async++/container/atomic_collection.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 

@@ -4,10 +4,11 @@
 #include "interleaving/sequence_point.hpp"
 #include "promise.hpp"
 #include "scheduler.hpp"
-#include "sync/atomic_collection.hpp"
+#include "container/atomic_collection.hpp"
 
 #include <cassert>
 #include <future>
+#include <utility>
 
 
 namespace asyncpp {

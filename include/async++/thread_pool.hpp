@@ -2,7 +2,7 @@
 
 
 #include "scheduler.hpp"
-#include "sync/atomic_stack.hpp"
+#include "container/atomic_stack.hpp"
 
 #include <atomic>
 #include <condition_variable>
