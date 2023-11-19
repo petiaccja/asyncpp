@@ -1,0 +1,117 @@
+name: Build & test
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v**.**
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        c_compiler: [gcc, clang, cl]
+        build_type: [Debug, Release]
+        cxx_standard: ["20"]
+        include:
+          - c_compiler: gcc
+            cxx_compiler: g++
+          - c_compiler: clang
+            cxx_compiler: clang++
+          - c_compiler: cl
+            cxx_compiler: cl
+          - os: windows-latest
+            binary_ext: ".exe"
+          - os: ubuntu-latest
+            binary_ext: ""
+          - build_type: Debug
+            conan_preset: "conan-debug"
+          - build_type: Release
+            conan_preset: "conan-release"
+        exclude:
+          - os: windows-latest
+            c_compiler: gcc
+          - os: windows-latest
+            c_compiler: clang
+          - os: ubuntu-latest
+            c_compiler: cl
+
+    name: ${{ matrix.c_compiler }} - ${{ matrix.build_type }} - ${{ matrix.os }} - c++${{ matrix.cxx_standard }}
+        
+    runs-on: ${{matrix.os}}
+    
+    steps:
+    - uses: actions/checkout@v4
+    - uses: seanmiddleditch/gha-setup-ninja@v4
+    - uses: seanmiddleditch/gha-setup-vsdevenv@master
+    - uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "17.0"
+        directory: ${{ runner.temp }}/llvm
+
+    - name: Install GCC
+      shell: bash
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+      run: |
+        sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+        sudo apt update
+        sudo apt install gcc-13 g++-13
+        sudo update-alternatives --remove-all gcc || true
+        sudo update-alternatives --remove-all g++ || true
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 10 --slave /usr/bin/g++ g++ /usr/bin/g++-13
+
+    - name: Install conan
+      shell: bash
+      env:
+        CC: "${{ matrix.c_compiler != 'cl' && matrix.c_compiler || '' }}"
+        CXX: "${{ matrix.cxx_compiler != 'cl' && matrix.cxx_compiler || '' }}"
+      run: |
+        pip install conan
+        conan profile detect --name ci --force
+        python $GITHUB_WORKSPACE/support/update-conan-profile.py $(conan profile path ci) ${{matrix.build_type}} ${{matrix.c_compiler}} ${{matrix.cxx_compiler}} ${{matrix.cxx_standard}}
+
+    - name: Cache conan packages
+      id: cache-conan
+      uses: actions/cache@v3
+      with:
+        path: ~/.conan2/p
+        key: conan-cache-packages-${{ matrix.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-${{ matrix.cxx_standard }}
+
+    - name: Create Build Environment
+      run: cmake -E make_directory ${{runner.workspace}}/build
+
+    - name: Configure CMake
+      shell: bash
+      working-directory: ${{runner.workspace}}/build
+      env:
+        CC: ${{matrix.c_compiler}}
+        CXX: ${{matrix.cxx_compiler}}
+      run: |
+        conan install $GITHUB_WORKSPACE --output-folder=. --build="*" -pr ci -pr:b ci -s build_type=${{ matrix.build_type }}
+        conan cache clean
+        cmake $GITHUB_WORKSPACE --preset ${{ matrix.conan_preset }}
+
+    - name: Build
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      run: |
+        cmake --build ./build/${{ matrix.build_type }}
+        cmake -E make_directory ${{runner.workspace}}/installation/SEDManager
+        cmake --install ./build/${{ matrix.build_type }} --prefix '${{runner.workspace}}/installation/SEDManager'
+
+    - name: Test
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      run: ./build/${{ matrix.build_type }}/bin/test
+
+    - name: Upload artifact binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: SEDManager-${{ matrix.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-${{ matrix.cxx_standard }}
+        path: '${{runner.workspace}}/installation/SEDManager'

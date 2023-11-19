@@ -1,0 +1,86 @@
+name: SonarQube
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SONAR_SCANNER_VERSION: 4.4.0.2170
+      SONAR_SERVER_URL: "https://sonarcloud.io"
+      BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: seanmiddleditch/gha-setup-ninja@v4
+      - uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "17.0"
+          directory: ${{ runner.temp }}/llvm
+
+      - name: Install GCC
+        shell: bash
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install gcc-13 g++-13
+          sudo update-alternatives --remove-all gcc || true
+          sudo update-alternatives --remove-all g++ || true
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 10 --slave /usr/bin/g++ g++ /usr/bin/g++-13
+
+      - name: Install conan
+        shell: bash
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          pip install conan
+          conan profile detect --name ci --force
+          python $GITHUB_WORKSPACE/support/update-conan-profile.py $(conan profile path ci) Debug $CC $CXX 17
+
+      - name: Cache conan packages
+        id: cache-conan
+        uses: actions/cache@v3
+        with:
+          path: ~/.conan2/p
+          key: conan-cache-packages-sonarqube
+
+      - name: Install sonar-scanner and build-wrapper
+        uses: SonarSource/sonarcloud-github-c-cpp@v2
+
+      - name: Create Build Environment
+        run: cmake -E make_directory ${{runner.workspace}}/build   
+        
+      - name: Configure CMake
+        shell: bash
+        working-directory: ${{runner.workspace}}/build
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          conan install $GITHUB_WORKSPACE --output-folder=. --build="*" -pr ci -pr:b ci -s build_type=Debug
+          conan cache clean
+          cmake $GITHUB_WORKSPACE --preset conan-debug -DENABLE_LLVM_COV:BOOL=ON
+
+      - name: Run build-wrapper
+        run: |
+          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{runner.workspace}}/build/build/Debug --clean-first
+
+      - name: Generate Test and Code Coverage
+        working-directory: ${{runner.workspace}}/build
+        shell: bash
+        run: |
+          ./build/Debug/bin/Test --reporter junit --out ${{runner.workspace}}/build/tests.xml
+          llvm-profdata merge -sparse default.profraw -o coverage.profdata
+          llvm-cov show ./build/Debug/bin/test -instr-profile=coverage.profdata > ${{runner.workspace}}/build/coverage.txt
+  
+      - name: Run sonar-scanner
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
