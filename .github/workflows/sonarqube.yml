@@ -74,7 +74,7 @@ jobs:
         working-directory: ${{runner.workspace}}/build
         shell: bash
         run: |
-          ./build/Debug/bin/Test --reporter junit --out ${{runner.workspace}}/build/tests.xml
+          ./build/Debug/bin/test --reporter junit --out ${{runner.workspace}}/build/tests.xml
           llvm-profdata merge -sparse default.profraw -o coverage.profdata
           llvm-cov show ./build/Debug/bin/test -instr-profile=coverage.profdata > ${{runner.workspace}}/build/coverage.txt
   
