@@ -8,6 +8,7 @@ target_sources(test
 		test_thread_pool.cpp
 		test_task.cpp
 		test_mutex.cpp
+		test_shared_mutex.cpp
 		interleaving/test_runner.cpp
 		test_shared_task.cpp
 		container/test_atomic_queue.cpp

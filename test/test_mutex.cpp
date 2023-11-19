@@ -1,3 +1,4 @@
+#include <async++/interleaving/runner.hpp>
 #include <async++/mutex.hpp>
 #include <async++/task.hpp>
 
@@ -8,7 +9,7 @@ using namespace asyncpp;
 
 TEST_CASE("Mutex: try lock", "[Mutex]") {
     static const auto coro = [](mutex& mtx) -> task<void> {
-        const auto lock = mtx.try_lock();
+        REQUIRE(mtx.try_lock());
         REQUIRE(!mtx.try_lock());
         co_return;
     };
@@ -20,8 +21,20 @@ TEST_CASE("Mutex: try lock", "[Mutex]") {
 
 TEST_CASE("Mutex: lock", "[Mutex]") {
     static const auto coro = [](mutex& mtx) -> task<void> {
-        const auto lock = co_await mtx;
+        co_await mtx;
         REQUIRE(!mtx.try_lock());
+    };
+
+    mutex mtx;
+    coro(mtx).get();
+}
+
+
+TEST_CASE("Mutex: unlock", "[Mutex]") {
+    static const auto coro = [](mutex& mtx) -> task<void> {
+        co_await mtx;
+        mtx.unlock();
+        REQUIRE(mtx.try_lock());
     };
 
     mutex mtx;
@@ -66,4 +79,41 @@ TEST_CASE("Mutex: unique lock start locked", "[Mutex]") {
 
     mutex mtx;
     coro(mtx).get();
+}
+
+
+TEST_CASE("Mutex: unique lock unlock", "[Mutex]") {
+    static const auto coro = [](mutex& mtx) -> task<void> {
+        unique_lock lk(co_await mtx);
+        lk.unlock();
+        REQUIRE(!lk.owns_lock());
+        co_return;
+    };
+
+    mutex mtx;
+    coro(mtx).get();
+}
+
+
+TEST_CASE("Mutex: resume awaiting", "[Mutex]") {
+    static const auto awaiter = [](mutex& mtx, std::vector<int>& sequence, int id) -> task<void> {
+        co_await mtx;
+        sequence.push_back(id);
+        mtx.unlock();
+    };
+    static const auto main = [](mutex& mtx, std::vector<int>& sequence) -> task<void> {
+        auto t1 = awaiter(mtx, sequence, 1);
+        auto t2 = awaiter(mtx, sequence, 2);
+
+        co_await mtx;
+        sequence.push_back(0);
+        t1.launch();
+        t2.launch();
+        mtx.unlock();
+    };
+
+    mutex mtx;
+    std::vector<int> sequence;
+    main(mtx, sequence).get();
+    REQUIRE(sequence == std::vector{ 0, 1, 2 });
 }

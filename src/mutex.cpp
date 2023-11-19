@@ -1,37 +1,34 @@
 #include <async++/mutex.hpp>
 
+#include <mutex>
+
+
 namespace asyncpp {
 
 bool mutex::awaitable::await_ready() noexcept {
-    m_lk = m_mtx->try_lock();
-    return m_lk.has_value();
+    return m_mtx->try_lock();
 }
 
 
-mutex::lock mutex::awaitable::await_resume() noexcept {
-    assert(m_lk);
-    return std::move(m_lk.value());
+mutex_lock<mutex> mutex::awaitable::await_resume() noexcept {
+    return { m_mtx };
 }
 
 
-void mutex::awaitable::on_ready(lock lk) noexcept {
-    m_lk = std::move(lk);
+void mutex::awaitable::on_ready() noexcept {
     assert(m_enclosing);
     m_enclosing->resume();
 }
 
 
-std::optional<mutex::lock> mutex::try_lock() noexcept {
+bool mutex::try_lock() noexcept {
     std::lock_guard lk(m_spinlock);
-    if (std::exchange(m_locked, true) == false) {
-        return lock(this);
-    }
-    return std::nullopt;
+    return std::exchange(m_locked, true) == false;
 }
 
 
 mutex::awaitable mutex::unique() noexcept {
-    return awaitable(this);
+    return { this };
 }
 
 
@@ -40,14 +37,14 @@ mutex::awaitable mutex::operator co_await() noexcept {
 }
 
 
-std::optional<mutex::lock> mutex::wait(awaitable* waiting) {
+bool mutex::lock_enqueue(awaitable* waiting) {
     std::lock_guard lk(m_spinlock);
     const bool acquired = std::exchange(m_locked, true) == false;
     if (acquired) {
-        return lock(this);
+        return true;
     }
     m_queue.push(waiting);
-    return std::nullopt;
+    return false;
 }
 
 
@@ -55,11 +52,13 @@ void mutex::unlock() {
     std::unique_lock lk(m_spinlock);
     assert(m_locked);
     m_locked = false;
-    awaitable* const next = m_queue.pop();
-    lk.unlock();
+    const auto next = m_queue.pop();
     if (next) {
         m_locked = true;
-        next->on_ready(lock(this));
+    }
+    lk.unlock();
+    if (next) {
+        next->on_ready();
     }
 }
 

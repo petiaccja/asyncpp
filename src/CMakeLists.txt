@@ -4,6 +4,7 @@ target_sources(async++
 	PRIVATE
 		thread_pool.cpp
 		mutex.cpp
+		shared_mutex.cpp
 		interleaving/runner.cpp
 		interleaving/sequencer.cpp
 		interleaving/state_tree.cpp

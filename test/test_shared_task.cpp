@@ -47,7 +47,7 @@ TEST_CASE("Shared task: interleave sync", "[Shared task]") {
         INFO((interleaving::interleaving_printer{ il, true }));
         REQUIRE(tester);
     }
-    REQUIRE(count > 0);
+    REQUIRE(count >= 3);
 }
 
 
@@ -97,7 +97,7 @@ TEST_CASE("Shared task: interleaving co_await", "[Shared task]") {
         INFO((interleaving::interleaving_printer{ il, true }));
         REQUIRE(tester);
     }
-    REQUIRE(count > 0);
+    REQUIRE(count >= 3);
 }
 
 
@@ -135,7 +135,7 @@ TEST_CASE("Shared task: interleaving abandon", "[Shared task]") {
         INFO((interleaving::interleaving_printer{ il, true }));
         REQUIRE(tester);
     }
-    REQUIRE(count > 0);
+    REQUIRE(count >= 3);
 }
 
 

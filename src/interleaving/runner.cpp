@@ -27,6 +27,7 @@ namespace impl_sp {
     sequence_point initial_point{ .acquire = false, .name = "<start>", .file = __FILE__, .line = __LINE__ };
     sequence_point final_point{ .acquire = false, .name = "<finish>", .file = __FILE__, .line = __LINE__ };
     thread_local std::shared_ptr<sequencer> local_sequencer;
+    thread_local filter local_filter;
 
 
     template <class Func>
@@ -43,7 +44,9 @@ namespace impl_sp {
 
     void wait(sequence_point& sp) {
         if (local_sequencer) {
-            local_sequencer->wait(sp);
+            if (local_filter(sp)) {
+                local_sequencer->wait(sp);
+            }
         }
     }
 
@@ -117,7 +120,8 @@ namespace impl_sp {
     }
 
 
-    void task_thread_func(std::shared_ptr<sequencer> seq, std::function<void()> func) {
+    void task_thread_func(std::shared_ptr<sequencer> seq, std::function<void()> func, filter filter_) {
+        local_filter = std::move(filter_);
         local_sequencer = seq;
         seq->wait(initial_point);
         func();
@@ -189,7 +193,7 @@ namespace impl_sp {
 } // namespace impl_sp
 
 
-generator<interleaving> run_all(std::function<std::any()> fixture, std::vector<std::function<void(std::any&)>> threads, std::vector<std::string_view> names) {
+generator<interleaving> run_all(std::function<std::any()> fixture, std::vector<std::function<void(std::any&)>> threads, std::vector<std::string_view> names, filter filter_) {
     using namespace impl_sp;
 
     std::vector<std::shared_ptr<sequencer>> sequencers;
@@ -211,8 +215,9 @@ generator<interleaving> run_all(std::function<std::any()> fixture, std::vector<s
             std::vector<std::jthread> os_threads;
             auto fixture_val = fixture();
             for (size_t i = 0; i < threads.size(); ++i) {
-                os_threads.emplace_back([exec_thread = sequencers[i], &tsk = threads[i], &fixture_val] {
-                    task_thread_func(exec_thread, [&] { tsk(fixture_val); });
+                os_threads.emplace_back([exec_thread = sequencers[i], &tsk = threads[i], &fixture_val, &filter_] {
+                    task_thread_func(
+                        exec_thread, [&] { tsk(fixture_val); }, filter_);
                 });
             }
             interleaving_ = control_thread_func(sequencers, root);
@@ -267,6 +272,11 @@ std::ostream& operator<<(std::ostream& os, const interleaving_printer& il) {
         os << "X";
     }
     return os;
+}
+
+
+bool filter::operator()(const sequence_point& point) const {
+    return std::regex_search(point.file.begin(), point.file.end(), m_files);
 }
 
 

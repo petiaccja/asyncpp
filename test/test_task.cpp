@@ -44,7 +44,7 @@ TEST_CASE("Task: interleaving sync", "[Task]") {
         INFO((interleaving::interleaving_printer{ il, true }));
         REQUIRE(tester);
     }
-    REQUIRE(count > 0);
+    REQUIRE(count >= 3);
 }
 
 
@@ -94,7 +94,7 @@ TEST_CASE("Task: interleaving co_await", "[Task]") {
         INFO((interleaving::interleaving_printer{ il, true }));
         REQUIRE(tester);
     }
-    REQUIRE(count > 0);
+    REQUIRE(count >= 3);
 }
 
 
@@ -132,7 +132,7 @@ TEST_CASE("Task: interleaving abandon", "[Task]") {
         INFO((interleaving::interleaving_printer{ il, true }));
         REQUIRE(tester);
     }
-    REQUIRE(count > 0);
+    REQUIRE(count >= 3);
 }
 
 

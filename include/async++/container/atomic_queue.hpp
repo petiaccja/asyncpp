@@ -3,6 +3,7 @@
 #include "../sync/spinlock.hpp"
 
 #include <atomic>
+#include <mutex>
 
 
 namespace asyncpp {
@@ -14,6 +15,7 @@ public:
         std::lock_guard lk(m_mtx);
         const auto prev_front = m_front.load(std::memory_order_relaxed);
         element->*prev = prev_front;
+        element->*next = nullptr;
         m_front.store(element, std::memory_order_relaxed);
         if (prev_front == nullptr) {
             m_back.store(element, std::memory_order_relaxed);
@@ -22,24 +24,6 @@ public:
             prev_front->*next = element;
         }
         return prev_front;
-    }
-
-    bool compare_push(Element*& expected, Element* element) {
-        std::lock_guard lk(m_mtx);
-        const auto prev_front = m_front.load(std::memory_order_relaxed);
-        if (prev_front == expected) {
-            element->*prev = prev_front;
-            m_front.store(element, std::memory_order_relaxed);
-            if (prev_front == nullptr) {
-                m_back.store(element, std::memory_order_relaxed);
-            }
-            else {
-                prev_front->*next = element;
-            }
-            return true;
-        }
-        expected = prev_front;
-        return false;
     }
 
     Element* pop() noexcept {
@@ -51,8 +35,19 @@ public:
             if (new_back == nullptr) {
                 m_front.store(nullptr, std::memory_order_relaxed);
             }
+            else {
+                new_back->*prev = nullptr;
+            }
         }
         return prev_back;
+    }
+
+    Element* front() {
+        return m_front.load(std::memory_order_relaxed);
+    }
+
+    Element* back() {
+        return m_back.load(std::memory_order_relaxed);
     }
 
     bool empty() const noexcept {
