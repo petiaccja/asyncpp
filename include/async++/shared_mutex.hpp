@@ -3,7 +3,7 @@
 #include "container/atomic_queue.hpp"
 #include "lock.hpp"
 #include "promise.hpp"
-#include "sync/spinlock.hpp"
+#include "threading/spinlock.hpp"
 
 #include <concepts>
 #include <optional>
