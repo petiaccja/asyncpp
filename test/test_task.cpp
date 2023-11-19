@@ -1,8 +1,8 @@
 #include "leak_tester.hpp"
 #include "test_schedulers.hpp"
 
-#include <async++/task.hpp>
 #include <async++/interleaving/runner.hpp>
+#include <async++/task.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -15,21 +15,21 @@ TEST_CASE("Task: interleaving sync", "[Task]") {
 
     struct fixture {
         thread_locked_scheduler sched;
-        task<int> task;
+        task<int> main_task;
     };
 
     leak_tester tester;
 
     auto make_fixture = [&tester] {
         auto f = std::make_shared<fixture>();
-        f->task = do_task(tester);
-        bind(f->task, f->sched);
+        f->main_task = do_task(tester);
+        bind(f->main_task, f->sched);
         return f;
     };
 
     auto sync_thread = [](std::shared_ptr<fixture> f) {
-        f->task.launch();
-        f->task.get();
+        f->main_task.launch();
+        f->main_task.get();
     };
     auto task_thread = [](std::shared_ptr<fixture> f) {
         INTERLEAVED_ACQUIRE(f->sched.wait_and_resume());
@@ -103,21 +103,21 @@ TEST_CASE("Task: interleaving abandon", "[Task]") {
 
     struct fixture {
         thread_locked_scheduler sched;
-        task<int> task;
+        task<int> main_task;
     };
 
     leak_tester tester;
 
     auto make_fixture = [&tester] {
         auto f = std::make_shared<fixture>();
-        f->task = do_task(tester);
-        bind(f->task, f->sched);
+        f->main_task = do_task(tester);
+        bind(f->main_task, f->sched);
         return f;
     };
 
     auto sync_thread = [](std::shared_ptr<fixture> f) {
-        f->task.launch();
-        f->task = {};
+        f->main_task.launch();
+        f->main_task = {};
     };
     auto task_thread = [](std::shared_ptr<fixture> f) {
         INTERLEAVED_ACQUIRE(f->sched.wait_and_resume());

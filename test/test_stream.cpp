@@ -1,4 +1,5 @@
 #include "leak_tester.hpp"
+
 #include <async++/stream.hpp>
 
 #include <vector>

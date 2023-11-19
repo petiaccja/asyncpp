@@ -109,9 +109,3 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       run: ./build/${{ matrix.build_type }}/bin/test
-
-    - name: Upload artifact binary
-      uses: actions/upload-artifact@v3
-      with:
-        name: SEDManager-${{ matrix.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-${{ matrix.cxx_standard }}
-        path: '${{runner.workspace}}/installation/SEDManager'
