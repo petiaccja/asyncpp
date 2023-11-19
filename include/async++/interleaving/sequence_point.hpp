@@ -56,7 +56,7 @@ namespace impl_sp {
 
 
     #define INTERLEAVED(EXPR)                                     \
-        [&](std::string_view func) {                              \
+        [&](std::string_view func) -> decltype(auto) {            \
             static ::asyncpp::interleaving::sequence_point sp = { \
                 false,                                            \
                 #EXPR,                                            \
@@ -70,7 +70,7 @@ namespace impl_sp {
 
 
     #define INTERLEAVED_ACQUIRE(EXPR)                             \
-        [&](std::string_view func) {                              \
+        [&](std::string_view func) -> decltype(auto) {            \
             static ::asyncpp::interleaving::sequence_point sp = { \
                 true,                                             \
                 #EXPR,                                            \

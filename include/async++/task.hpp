@@ -151,26 +151,6 @@ namespace impl_task {
         }
     };
 
-
-    template <class T>
-    struct sync_awaitable : basic_awaitable<T> {
-        promise<T>* m_awaited = nullptr;
-        std::promise<task_result<T>> m_promise;
-        std::future<task_result<T>> m_future = m_promise.get_future();
-
-        sync_awaitable(promise<T>* awaited) noexcept : m_awaited(awaited) {
-            const bool ready = m_awaited->await(this);
-            if (ready) {
-                m_promise.set_value(m_awaited->get_result());
-                m_awaited->release();
-            }
-        }
-        void on_ready() noexcept final {
-            return m_promise.set_value(m_awaited->get_result());
-        }
-    };
-
-
 } // namespace impl_task
 
 
@@ -203,17 +183,6 @@ public:
     bool ready() const {
         assert(valid());
         return m_promise->ready();
-    }
-
-    T get() {
-        assert(valid());
-        impl_task::sync_awaitable<T> awaitable(std::exchange(m_promise, nullptr));
-        if constexpr (!std::is_void_v<T>) {
-            return std::forward<T>(INTERLEAVED_ACQUIRE(awaitable.m_future.get()).get_or_throw());
-        }
-        else {
-            INTERLEAVED_ACQUIRE(awaitable.m_future.get()).get_or_throw();
-        }
     }
 
     auto operator co_await() {
