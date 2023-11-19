@@ -1,5 +1,5 @@
-#include <async++/join.hpp>
 #include <async++/interleaving/runner.hpp>
+#include <async++/join.hpp>
 #include <async++/mutex.hpp>
 #include <async++/task.hpp>
 
