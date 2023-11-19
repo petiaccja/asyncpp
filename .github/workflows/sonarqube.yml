@@ -40,7 +40,7 @@ jobs:
         run: |
           pip install conan
           conan profile detect --name ci --force
-          python $GITHUB_WORKSPACE/support/update-conan-profile.py $(conan profile path ci) Debug $CC $CXX 17
+          python $GITHUB_WORKSPACE/support/update-conan-profile.py $(conan profile path ci) Debug $CC $CXX 20
 
       - name: Cache conan packages
         id: cache-conan
