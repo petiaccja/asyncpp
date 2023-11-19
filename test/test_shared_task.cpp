@@ -2,53 +2,13 @@
 #include "test_schedulers.hpp"
 
 #include <async++/interleaving/runner.hpp>
+#include <async++/join.hpp>
 #include <async++/shared_task.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 
 using namespace asyncpp;
-
-
-TEST_CASE("Shared task: interleave sync", "[Shared task]") {
-    static const auto do_task = [](leak_tester) -> shared_task<void> {
-        co_return;
-    };
-
-    leak_tester tester;
-
-    struct fixture {
-        thread_locked_scheduler sched;
-        shared_task<void> task;
-    };
-
-    auto make_fixture = [&tester] {
-        auto f = std::make_shared<fixture>();
-        f->task = do_task(tester);
-        bind(f->task, f->sched);
-        return f;
-    };
-
-    auto sync_thread = [](std::shared_ptr<fixture> f) {
-        f->task.launch();
-        f->task.get();
-    };
-    auto task_thread = [](std::shared_ptr<fixture> f) {
-        INTERLEAVED_ACQUIRE(f->sched.wait_and_resume());
-    };
-
-    auto gen = interleaving::run_all(std::function(make_fixture),
-                                     std::vector{ std::function(sync_thread), std::function(task_thread) },
-                                     { "$sync_1", "$task" });
-
-    size_t count = 0;
-    for ([[maybe_unused]] const auto& il : gen) {
-        ++count;
-        INFO((interleaving::interleaving_printer{ il, true }));
-        REQUIRE(tester);
-    }
-    REQUIRE(count >= 3);
-}
 
 
 TEST_CASE("Shared task: interleaving co_await", "[Shared task]") {
@@ -139,26 +99,6 @@ TEST_CASE("Shared task: interleaving abandon", "[Shared task]") {
 }
 
 
-TEST_CASE("Shared task: get value", "[Shared task]") {
-    static const auto coro = [](int value) -> shared_task<int> {
-        co_return value;
-    };
-    auto task = coro(1);
-    REQUIRE(task.get() == 1);
-    REQUIRE(task.get() == 1); // Should be possible to get a second time too.
-}
-
-
-TEST_CASE("Shared task: get ref", "[Shared task]") {
-    static const auto coro = [](int& value) -> shared_task<int&> {
-        co_return value;
-    };
-    int value = 1;
-    auto task = coro(value);
-    REQUIRE(&task.get() == &value);
-}
-
-
 TEST_CASE("Shared task: co_await value", "[Shared task]") {
     static const auto coro = [](int value) -> shared_task<int> {
         co_return value;
@@ -166,7 +106,7 @@ TEST_CASE("Shared task: co_await value", "[Shared task]") {
     static const auto enclosing = [](int value) -> shared_task<int> {
         co_return co_await coro(value);
     };
-    REQUIRE(enclosing(42).get() == 42);
+    REQUIRE(join(enclosing(42)) == 42);
 }
 
 
@@ -179,7 +119,7 @@ TEST_CASE("Shared task: co_await ref", "[Shared task]") {
         co_return co_await coro(value);
     };
     auto task = enclosing(value);
-    auto& result = task.get();
+    auto& result = join(task);
     REQUIRE(result == 42);
     REQUIRE(&result == &value);
 }
@@ -194,5 +134,5 @@ TEST_CASE("Shared task: co_await void", "[Shared task]") {
         co_await coro();
     };
     auto task = enclosing();
-    task.get();
+    join(task);
 }

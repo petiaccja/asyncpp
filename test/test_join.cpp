@@ -7,6 +7,11 @@
 using namespace asyncpp;
 
 
+static_assert(std::is_same_v<await_result_t<task<void>>, void>);
+static_assert(std::is_same_v<await_result_t<task<int>>, int>);
+static_assert(std::is_same_v<await_result_t<task<int&>>, int&>);
+
+
 TEST_CASE("Join: void", "[Join]") {
     static const auto coro = []() -> task<void> {
         co_return;
@@ -34,7 +39,7 @@ TEST_CASE("Join: ref", "[Join]") {
 
     int value = 1;
     auto t = coro(value);
-    decltype(auto) result = join(t);
+    int& result = join(t);
     REQUIRE(result == 1);
     REQUIRE(&result == &value);
 }

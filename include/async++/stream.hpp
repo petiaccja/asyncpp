@@ -138,23 +138,6 @@ namespace impl_stream {
         }
     };
 
-
-    template <class T>
-    struct sync_awaitable : basic_awaitable<T> {
-        promise<T>* m_awaited;
-        sync_awaitable(promise<T>* awaited) noexcept : m_awaited(awaited) {
-            const bool ready = awaited->await(this);
-            if (ready) {
-                m_promise.set_value(awaited->get_result());
-            }
-        }
-        void on_ready() noexcept final {
-            m_promise.set_value(m_awaited->get_result());
-        }
-        std::promise<task_result<T>> m_promise;
-        std::future<task_result<T>> m_future = m_promise.get_future();
-    };
-
 } // namespace impl_stream
 
 
@@ -175,16 +158,6 @@ public:
     stream(promise_type* promise) : m_promise(promise) {}
     ~stream() {
         release();
-    }
-
-    auto get() const -> std::optional<typename impl::task_result<T>::wrapper_type> {
-        assert(good() && "stream is finished");
-        impl_stream::sync_awaitable<T> awaitable(m_promise);
-        auto result = awaitable.m_future.get();
-        if (!result.has_value()) {
-            return std::nullopt;
-        }
-        return { std::forward<T>(result.get_or_throw()) };
     }
 
     auto operator co_await() const {

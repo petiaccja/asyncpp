@@ -1,5 +1,6 @@
 #include "test_schedulers.hpp"
 
+#include <async++/join.hpp>
 #include <async++/task.hpp>
 #include <async++/thread_pool.hpp>
 
@@ -38,7 +39,7 @@ TEST_CASE("Thread pool: perf test", "[Scheduler]") {
 
     const auto count = int64_t(std::pow(branching, depth));
     const auto start = std::chrono::high_resolution_clock::now();
-    const auto result = bind(coro(coro, depth), sched).get();
+    const auto result = join(bind(coro(coro, depth), sched));
     const auto end = std::chrono::high_resolution_clock::now();
     std::cout << "performance: " << 1e9 * double(count) / std::chrono::nanoseconds(end - start).count() << " / s" << std::endl;
     REQUIRE(result == count);

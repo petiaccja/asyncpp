@@ -1,4 +1,5 @@
 #include <async++/interleaving/runner.hpp>
+#include <async++/join.hpp>
 #include <async++/shared_mutex.hpp>
 #include <async++/task.hpp>
 
@@ -16,7 +17,7 @@ TEST_CASE("Shared mutex: try lock", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -28,7 +29,7 @@ TEST_CASE("Shared mutex: lock", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -42,7 +43,7 @@ TEST_CASE("Shared mutex: unlock", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -55,7 +56,7 @@ TEST_CASE("Shared mutex: try lock shared", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -67,7 +68,7 @@ TEST_CASE("Shared mutex: lock shared", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -81,7 +82,7 @@ TEST_CASE("Shared mutex: unlock shared", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -95,7 +96,7 @@ TEST_CASE("Shared mutex: unique lock try", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -109,7 +110,7 @@ TEST_CASE("Shared mutex: unique lock await", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -121,7 +122,7 @@ TEST_CASE("Shared mutex: unique lock start locked", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -134,7 +135,7 @@ TEST_CASE("Shared mutex: unique lock unlock", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -148,7 +149,7 @@ TEST_CASE("Shared mutex: shared lock try", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -162,7 +163,7 @@ TEST_CASE("Shared mutex: shared lock await", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -174,7 +175,7 @@ TEST_CASE("Shared mutex: shared lock start locked", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -188,7 +189,7 @@ TEST_CASE("Shared mutex: shared lock unlock", "[Shared mutex]") {
     };
 
     shared_mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -220,7 +221,7 @@ TEST_CASE("Shared mutex: resume awaiting", "[Shared mutex]") {
 
     shared_mutex mtx;
     std::vector<int> sequence;
-    main(mtx, sequence).get();
+    join(main(mtx, sequence));
     REQUIRE(sequence == std::vector{ 0, 1, 2, -1, -2 });
 }
 
@@ -257,6 +258,6 @@ TEST_CASE("Shared mutex: unique starvation", "[Shared mutex]") {
 
     shared_mutex mtx;
     std::vector<int> sequence;
-    main(mtx, sequence).get();
+    join(main(mtx, sequence));
     REQUIRE(sequence == std::vector{ 0, 1, 2, -1, 3, 0, 4 });
 }

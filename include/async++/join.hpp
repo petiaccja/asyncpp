@@ -1,6 +1,7 @@
 #pragma once
 
 #include "concepts.hpp"
+#include "interleaving/sequence_point.hpp"
 #include "promise.hpp"
 
 #include <coroutine>
@@ -69,11 +70,17 @@ namespace impl_join {
 
 
 template <awaitable Awaitable>
-decltype(auto) join(Awaitable&& object) {
-    auto joiner_ = [&object]() -> impl_join::joiner<await_result_t<Awaitable>> {
+auto join(Awaitable&& object) -> await_result_t<std::remove_reference_t<Awaitable>> {
+    using T = await_result_t<std::remove_reference_t<Awaitable>>;
+    auto joiner_ = [&object]() -> impl_join::joiner<T> {
         co_return co_await object;
     }();
-    return joiner_.future.get();
+    if constexpr (std::is_void_v<T> || std::is_reference_v<T>) {
+        return INTERLEAVED_ACQUIRE(joiner_.future.get());
+    }
+    else {
+        return std::forward<T>(INTERLEAVED_ACQUIRE(joiner_.future.get()));
+    }
 }
 
 } // namespace asyncpp

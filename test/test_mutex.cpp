@@ -1,3 +1,4 @@
+#include <async++/join.hpp>
 #include <async++/interleaving/runner.hpp>
 #include <async++/mutex.hpp>
 #include <async++/task.hpp>
@@ -15,7 +16,7 @@ TEST_CASE("Mutex: try lock", "[Mutex]") {
     };
 
     mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -26,7 +27,7 @@ TEST_CASE("Mutex: lock", "[Mutex]") {
     };
 
     mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -38,7 +39,7 @@ TEST_CASE("Mutex: unlock", "[Mutex]") {
     };
 
     mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -52,7 +53,7 @@ TEST_CASE("Mutex: unique lock try", "[Mutex]") {
     };
 
     mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -66,7 +67,7 @@ TEST_CASE("Mutex: unique lock await", "[Mutex]") {
     };
 
     mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -78,7 +79,7 @@ TEST_CASE("Mutex: unique lock start locked", "[Mutex]") {
     };
 
     mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -91,7 +92,7 @@ TEST_CASE("Mutex: unique lock unlock", "[Mutex]") {
     };
 
     mutex mtx;
-    coro(mtx).get();
+    join(coro(mtx));
 }
 
 
@@ -114,6 +115,6 @@ TEST_CASE("Mutex: resume awaiting", "[Mutex]") {
 
     mutex mtx;
     std::vector<int> sequence;
-    main(mtx, sequence).get();
+    join(main(mtx, sequence));
     REQUIRE(sequence == std::vector{ 0, 1, 2 });
 }

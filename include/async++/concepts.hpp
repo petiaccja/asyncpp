@@ -8,14 +8,14 @@ namespace asyncpp {
 // clang-format off
 
 template <class T>
-concept directly_awaitable = requires(T& t) {
+concept directly_awaitable = requires(std::remove_reference_t<T>& t) {
     { t.await_ready() } -> std::convertible_to<bool>;
     { t.await_resume() };
 };
 
 
 template <class T>
-concept indirectly_awaitable = requires(T& t) {
+concept indirectly_awaitable = requires(std::remove_reference_t<T>& t) {
     { t.operator co_await() } -> directly_awaitable;
 };
 
