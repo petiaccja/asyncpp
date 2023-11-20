@@ -71,6 +71,11 @@ class unique_lock {
 public:
     unique_lock(Mutex& mtx) noexcept : m_mtx(&mtx) {}
     unique_lock(mutex_lock<Mutex>&& lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
+    ~unique_lock() {
+        if (owns_lock()) {
+            m_mtx->unlock();
+        }
+    }
 
     bool try_lock() noexcept {
         assert(!owns_lock());
@@ -136,6 +141,11 @@ class shared_lock {
 public:
     shared_lock(Mutex& mtx) noexcept : m_mtx(&mtx) {}
     shared_lock(mutex_shared_lock<Mutex> lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
+    ~shared_lock() {
+        if (owns_lock()) {
+            m_mtx->unlock_shared();
+        }
+    }
 
     bool try_lock() noexcept {
         assert(!owns_lock());

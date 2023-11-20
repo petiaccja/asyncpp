@@ -13,36 +13,26 @@ public:
 
 
 template <class T>
-    requires requires(T& t, scheduler& s) { t.bind(s); }
-T& bind(T& t, scheduler& s) {
-    t.bind(s);
-    return t;
-}
-
-
-template <class T>
     requires requires(T&& t, scheduler& s) { t.bind(s); }
-T bind(T&& t, scheduler& s) {
+auto bind(T&& t, scheduler& s) -> decltype(auto) {
     t.bind(s);
-    return std::move(t);
+    return std::forward<T>(t);
 }
 
 
 template <class T>
-    requires requires(T& t, scheduler& s) { bind(t, s); t.launch(); }
-T& launch(T& t, scheduler& s) {
-    bind(t, s);
+    requires requires(T&& t) { t.launch(); }
+auto launch(T&& t) -> decltype(auto) {
     t.launch();
-    return t;
+    return std::forward<T>(t);
 }
 
 
 template <class T>
-    requires requires(T&& t, scheduler& s) { bind(t, s); t.launch(); }
-T launch(T&& t, scheduler& s) {
+    requires requires(T&& t, scheduler& s) { bind(t, s); launch(t); }
+auto launch(T&& t, scheduler& s) -> decltype(auto) {
     bind(t, s);
-    t.launch();
-    return std::move(t);
+    return launch(std::forward<T>(t));
 }
 
 } // namespace asyncpp

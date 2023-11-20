@@ -193,6 +193,21 @@ TEST_CASE("Shared mutex: shared lock unlock", "[Shared mutex]") {
 }
 
 
+TEST_CASE("Shared mutex: shared lock destroy", "[Shared mutex]") {
+    static const auto coro = [](shared_mutex& mtx) -> task<void> {
+        {
+            shared_lock lk(co_await mtx.shared());
+            REQUIRE(lk.owns_lock());
+        }
+        REQUIRE(mtx.try_lock());
+        co_return;
+    };
+
+    shared_mutex mtx;
+    join(coro(mtx));
+}
+
+
 TEST_CASE("Shared mutex: resume awaiting", "[Shared mutex]") {
     static const auto awaiter = [](shared_mutex& mtx, std::vector<int>& sequence, int id) -> task<void> {
         co_await mtx.unique();
