@@ -96,6 +96,21 @@ TEST_CASE("Mutex: unique lock unlock", "[Mutex]") {
 }
 
 
+TEST_CASE("Mutex: unique lock destroy", "[Shared mutex]") {
+    static const auto coro = [](mutex& mtx) -> task<void> {
+        {
+            unique_lock lk(co_await mtx);
+            REQUIRE(lk.owns_lock());
+        }
+        REQUIRE(mtx.try_lock());
+        co_return;
+    };
+
+    mutex mtx;
+    join(coro(mtx));
+}
+
+
 TEST_CASE("Mutex: resume awaiting", "[Mutex]") {
     static const auto awaiter = [](mutex& mtx, std::vector<int>& sequence, int id) -> task<void> {
         co_await mtx;

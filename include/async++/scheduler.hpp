@@ -1,5 +1,6 @@
 #pragma once
 
+#include "concepts.hpp"
 #include "promise.hpp"
 
 
@@ -12,37 +13,25 @@ public:
 };
 
 
-template <class T>
-    requires requires(T& t, scheduler& s) { t.bind(s); }
-T& bind(T& t, scheduler& s) {
+template <bindable_coroutine T>
+auto bind(T&& t, scheduler& s) -> decltype(auto) {
     t.bind(s);
-    return t;
+    return std::forward<T>(t);
 }
 
 
-template <class T>
-    requires requires(T&& t, scheduler& s) { t.bind(s); }
-T bind(T&& t, scheduler& s) {
-    t.bind(s);
-    return std::move(t);
-}
-
-
-template <class T>
-    requires requires(T& t, scheduler& s) { bind(t, s); t.launch(); }
-T& launch(T& t, scheduler& s) {
-    bind(t, s);
+template <launchable_coroutine T>
+auto launch(T&& t) -> decltype(auto) {
     t.launch();
-    return t;
+    return std::forward<T>(t);
 }
 
 
 template <class T>
-    requires requires(T&& t, scheduler& s) { bind(t, s); t.launch(); }
-T launch(T&& t, scheduler& s) {
+    requires(bindable_coroutine<T> && launchable_coroutine<T>)
+auto launch(T&& t, scheduler& s) -> decltype(auto) {
     bind(t, s);
-    t.launch();
-    return std::move(t);
+    return launch(std::forward<T>(t));
 }
 
 } // namespace asyncpp
