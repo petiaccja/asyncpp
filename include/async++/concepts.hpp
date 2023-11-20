@@ -5,6 +5,8 @@
 
 namespace asyncpp {
 
+class scheduler;
+
 // clang-format off
 
 template <class T>
@@ -22,6 +24,15 @@ concept indirectly_awaitable = requires(std::remove_reference_t<T>& t) {
 
 template <class T>
 concept awaitable = directly_awaitable<T> || indirectly_awaitable<T>;
+
+
+template <class T>
+concept launchable_coroutine = requires(T&& t) { t.launch(); };
+
+
+template <class T>
+concept bindable_coroutine = requires(T&& t, scheduler& s) { t.bind(s); };
+
 
 // clang-format on
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "concepts.hpp"
 #include "promise.hpp"
 
 
@@ -12,16 +13,14 @@ public:
 };
 
 
-template <class T>
-    requires requires(T&& t, scheduler& s) { t.bind(s); }
+template <bindable_coroutine T>
 auto bind(T&& t, scheduler& s) -> decltype(auto) {
     t.bind(s);
     return std::forward<T>(t);
 }
 
 
-template <class T>
-    requires requires(T&& t) { t.launch(); }
+template <launchable_coroutine T>
 auto launch(T&& t) -> decltype(auto) {
     t.launch();
     return std::forward<T>(t);
@@ -29,7 +28,7 @@ auto launch(T&& t) -> decltype(auto) {
 
 
 template <class T>
-    requires requires(T&& t, scheduler& s) { bind(t, s); launch(t); }
+    requires(bindable_coroutine<T> && launchable_coroutine<T>)
 auto launch(T&& t, scheduler& s) -> decltype(auto) {
     bind(t, s);
     return launch(std::forward<T>(t));

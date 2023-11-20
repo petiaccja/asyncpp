@@ -71,6 +71,20 @@ class unique_lock {
 public:
     unique_lock(Mutex& mtx) noexcept : m_mtx(&mtx) {}
     unique_lock(mutex_lock<Mutex>&& lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
+    unique_lock(unique_lock&& rhs) noexcept : m_mtx(rhs.m_mtx), m_owned(rhs.m_owned) {
+        rhs.m_mtx = nullptr;
+        rhs.m_owned = false;
+    }
+    unique_lock& operator=(unique_lock&& rhs) noexcept {
+        if (owns_lock()) {
+            m_mtx->unlock();
+        }
+        m_mtx = std::exchange(rhs.m_mtx, nullptr);
+        m_owned = std::exchange(rhs.m_owned, false);
+        return *this;
+    }
+    unique_lock(const unique_lock& rhs) = delete;
+    unique_lock& operator=(const unique_lock& rhs) = delete;
     ~unique_lock() {
         if (owns_lock()) {
             m_mtx->unlock();
@@ -107,7 +121,7 @@ public:
     }
 
 private:
-    Mutex* m_mtx;
+    Mutex* m_mtx = nullptr;
     bool m_owned = false;
 };
 
@@ -141,6 +155,20 @@ class shared_lock {
 public:
     shared_lock(Mutex& mtx) noexcept : m_mtx(&mtx) {}
     shared_lock(mutex_shared_lock<Mutex> lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
+    shared_lock(shared_lock&& rhs) noexcept : m_mtx(rhs.m_mtx), m_owned(rhs.m_owned) {
+        rhs.m_mtx = nullptr;
+        rhs.m_owned = false;
+    }
+    shared_lock& operator=(shared_lock&& rhs) noexcept {
+        if (owns_lock()) {
+            m_mtx->unlock_shared();
+        }
+        m_mtx = std::exchange(rhs.m_mtx, nullptr);
+        m_owned = std::exchange(rhs.m_owned, false);
+        return *this;
+    }
+    shared_lock(const shared_lock& rhs) = delete;
+    shared_lock& operator=(const shared_lock& rhs) = delete;
     ~shared_lock() {
         if (owns_lock()) {
             m_mtx->unlock_shared();
