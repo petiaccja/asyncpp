@@ -15,7 +15,7 @@ In this section:
 - [Coroutine primitives](#coroutine_primitives)
 - [Synchronization primitives](#sync_primitives)
 - [Schedulers](#usage_schedulers)
-- [Schedulers](#sync_join)
+- [Synchronizing coroutines and functions](#sync_join)
 - [Interaction with other coroutine libraries](#extending_asyncpp)
 
 ### <a name="coroutine_primitives"></a>Coroutine primitives
