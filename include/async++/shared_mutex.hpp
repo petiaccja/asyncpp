@@ -57,6 +57,13 @@ class shared_mutex {
     bool lock_enqueue_shared(shared_awaitable* waiting);
 
 public:
+    shared_mutex() = default;
+    shared_mutex(const shared_mutex&) = delete;
+    shared_mutex(shared_mutex&&) = delete;
+    shared_mutex& operator=(const shared_mutex&) = delete;
+    shared_mutex& operator=(shared_mutex&&) = delete;
+    ~shared_mutex();
+
     bool try_lock() noexcept;
     bool try_lock_shared() noexcept;
     awaitable unique() noexcept;

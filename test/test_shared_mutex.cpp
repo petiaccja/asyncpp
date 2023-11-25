@@ -13,6 +13,7 @@ TEST_CASE("Shared mutex: try lock", "[Shared mutex]") {
         REQUIRE(mtx.try_lock());
         REQUIRE(!mtx.try_lock());
         REQUIRE(!mtx.try_lock_shared());
+        mtx.unlock();
         co_return;
     };
 
@@ -26,6 +27,7 @@ TEST_CASE("Shared mutex: lock", "[Shared mutex]") {
         co_await mtx.unique();
         REQUIRE(!mtx.try_lock());
         REQUIRE(!mtx.try_lock_shared());
+        mtx.unlock();
     };
 
     shared_mutex mtx;
@@ -40,6 +42,7 @@ TEST_CASE("Shared mutex: unlock", "[Shared mutex]") {
         REQUIRE(mtx.try_lock());
         mtx.unlock();
         REQUIRE(mtx.try_lock_shared());
+        mtx.unlock_shared();
     };
 
     shared_mutex mtx;
@@ -52,6 +55,8 @@ TEST_CASE("Shared mutex: try lock shared", "[Shared mutex]") {
         REQUIRE(mtx.try_lock_shared());
         REQUIRE(!mtx.try_lock());
         REQUIRE(mtx.try_lock_shared());
+        mtx.unlock_shared();
+        mtx.unlock_shared();
         co_return;
     };
 
@@ -65,6 +70,8 @@ TEST_CASE("Shared mutex: lock shared", "[Shared mutex]") {
         co_await mtx.shared();
         REQUIRE(!mtx.try_lock());
         REQUIRE(mtx.try_lock_shared());
+        mtx.unlock_shared();
+        mtx.unlock_shared();
     };
 
     shared_mutex mtx;
@@ -79,6 +86,7 @@ TEST_CASE("Shared mutex: unlock shared", "[Shared mutex]") {
         REQUIRE(mtx.try_lock());
         mtx.unlock();
         REQUIRE(mtx.try_lock_shared());
+        mtx.unlock_shared();
     };
 
     shared_mutex mtx;
@@ -200,6 +208,7 @@ TEST_CASE("Shared mutex: shared lock destroy", "[Shared mutex]") {
             REQUIRE(lk.owns_lock());
         }
         REQUIRE(mtx.try_lock());
+        mtx.unlock();
         co_return;
     };
 
@@ -269,6 +278,7 @@ TEST_CASE("Shared mutex: unique starvation", "[Shared mutex]") {
         co_await mtx.shared();
         sequence.push_back(0);
         s4.launch();
+        mtx.unlock_shared();
     };
 
     shared_mutex mtx;

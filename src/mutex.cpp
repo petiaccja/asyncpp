@@ -21,6 +21,13 @@ void mutex::awaitable::on_ready() noexcept {
 }
 
 
+mutex::~mutex() {
+    std::lock_guard lk(m_spinlock);
+    if (m_locked) {
+        std::terminate();
+    }
+}
+
 bool mutex::try_lock() noexcept {
     std::lock_guard lk(m_spinlock);
     return std::exchange(m_locked, true) == false;
