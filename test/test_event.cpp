@@ -19,7 +19,7 @@ TEST_CASE("Event: co_await interleaving", "[Event]") {
     };
 
     auto wait_thread = [](std::shared_ptr<fixture> f) {
-        static const auto coro = [&]() -> task<int> {
+        const auto coro = [f]() -> task<int> {
             co_return co_await f->evt;
         };
         auto t = coro();

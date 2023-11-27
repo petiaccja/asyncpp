@@ -74,8 +74,9 @@ namespace impl_event {
             auto awaiter = INTERLEAVED(m_awaiters.close());
             assert(!m_awaiters.closed(awaiter) && "cannot set event twice");
             while (awaiter != nullptr) {
+                const auto next = awaiter->m_next;
                 awaiter->on_ready();
-                awaiter = awaiter->m_next;
+                awaiter = next;
             }
         }
 
