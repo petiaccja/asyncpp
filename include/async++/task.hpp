@@ -7,7 +7,6 @@
 
 #include <cassert>
 #include <coroutine>
-#include <future>
 #include <utility>
 
 
@@ -61,13 +60,9 @@ namespace impl_task {
         }
 
         bool await(basic_awaitable<T>* awaiter) noexcept {
+            start();
             auto state = INTERLEAVED(m_state.exchange(awaiter));
             assert(state == CREATED || state == RUNNING || state == READY);
-            if (state == CREATED) {
-                INTERLEAVED(m_state.store(RUNNING));
-                resume();
-                state = INTERLEAVED(m_state.exchange(awaiter));
-            }
             if (state == READY) {
                 INTERLEAVED(m_state.store(READY));
             }
@@ -122,7 +117,7 @@ namespace impl_task {
         awaitable(promise<T>* awaited) : m_awaited(awaited) {}
 
         constexpr bool await_ready() const noexcept {
-            return false;
+            return m_awaited->ready();
         }
 
         template <std::convertible_to<const resumable_promise&> Promise>
@@ -141,7 +136,7 @@ namespace impl_task {
                 return std::forward<T>(m_result.get_or_throw());
             }
             else {
-                m_result.get_or_throw();
+                return m_result.get_or_throw();
             }
         }
 
