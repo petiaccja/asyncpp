@@ -15,6 +15,7 @@ target_sources(test
 		test_stream.cpp
 		test_task.cpp
 		test_thread_pool.cpp
+		test_event.cpp
 )
 
 

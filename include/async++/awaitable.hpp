@@ -16,6 +16,12 @@ namespace impl {
 
         std::optional<std::variant<value_type, std::exception_ptr>> m_result;
 
+        task_result() = default;
+
+        task_result(value_type value) : m_result(std::move(value)) {}
+
+        task_result(std::exception_ptr value) : m_result(std::move(value)) {}
+
         task_result& operator=(value_type value) {
             m_result = std::move(value);
             return *this;
