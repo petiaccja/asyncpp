@@ -29,28 +29,28 @@ class shared_mutex {
         using basic_awaitable::basic_awaitable;
 
         bool await_ready() noexcept;
-        template <std::convertible_to<const impl::resumable_promise&> Promise>
+        template <std::convertible_to<const resumable_promise&> Promise>
         bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept;
         mutex_lock<shared_mutex> await_resume() noexcept;
         void on_ready() noexcept final;
         bool is_shared() const noexcept final;
 
     private:
-        impl::resumable_promise* m_enclosing = nullptr;
+        resumable_promise* m_enclosing = nullptr;
     };
 
     struct shared_awaitable : basic_awaitable {
         using basic_awaitable::basic_awaitable;
 
         bool await_ready() noexcept;
-        template <std::convertible_to<const impl::resumable_promise&> Promise>
+        template <std::convertible_to<const resumable_promise&> Promise>
         bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept;
         mutex_shared_lock<shared_mutex> await_resume() noexcept;
         void on_ready() noexcept final;
         bool is_shared() const noexcept final;
 
     private:
-        impl::resumable_promise* m_enclosing = nullptr;
+        resumable_promise* m_enclosing = nullptr;
     };
 
     bool lock_enqueue(awaitable* waiting);
@@ -81,7 +81,7 @@ private:
 };
 
 
-template <std::convertible_to<const impl::resumable_promise&> Promise>
+template <std::convertible_to<const resumable_promise&> Promise>
 bool shared_mutex::awaitable::await_suspend(std::coroutine_handle<Promise> enclosing) noexcept {
     m_enclosing = &enclosing.promise();
     const bool ready = m_mtx->lock_enqueue(this);
@@ -89,7 +89,7 @@ bool shared_mutex::awaitable::await_suspend(std::coroutine_handle<Promise> enclo
 }
 
 
-template <std::convertible_to<const impl::resumable_promise&> Promise>
+template <std::convertible_to<const resumable_promise&> Promise>
 bool shared_mutex::shared_awaitable::await_suspend(std::coroutine_handle<Promise> enclosing) noexcept {
     m_enclosing = &enclosing.promise();
     const bool ready = m_mtx->lock_enqueue_shared(this);

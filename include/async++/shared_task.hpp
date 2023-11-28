@@ -19,8 +19,6 @@ class shared_task;
 
 namespace impl_shared_task {
 
-    using namespace impl;
-
     template <class T>
     struct chained_awaitable : basic_awaitable<T> {
         chained_awaitable* m_next;

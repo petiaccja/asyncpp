@@ -21,8 +21,6 @@ class task;
 
 namespace impl_task {
 
-    using namespace impl;
-
     template <class T>
     struct promise : return_promise<T>, resumable_promise, schedulable_promise {
         struct final_awaitable {
@@ -52,7 +50,7 @@ namespace impl_task {
             auto created = CREATED;
             const bool success = INTERLEAVED(m_state.compare_exchange_strong(created, RUNNING));
             if (success) {
-                m_released.clear();
+                INTERLEAVED(m_released.clear());
                 resume();
             }
         }

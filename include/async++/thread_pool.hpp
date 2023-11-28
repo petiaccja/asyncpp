@@ -18,8 +18,8 @@ class thread_pool : public scheduler {
         worker* m_next;
 
     public:
-        void add_work_item(impl::schedulable_promise& promise);
-        impl::schedulable_promise* get_work_item();
+        void add_work_item(schedulable_promise& promise);
+        schedulable_promise* get_work_item();
         bool has_work() const;
         bool is_terminated() const;
         void terminate();
@@ -27,7 +27,7 @@ class thread_pool : public scheduler {
         void wait() const;
 
     private:
-        atomic_stack<impl::schedulable_promise, &impl::schedulable_promise::m_scheduler_next> m_work_items;
+        atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> m_work_items;
         mutable std::condition_variable m_wake_cv;
         mutable std::mutex m_wake_mutex;
         std::atomic_flag m_terminated;
@@ -39,7 +39,7 @@ public:
     thread_pool& operator=(thread_pool&&) = delete;
     ~thread_pool() noexcept;
 
-    void schedule(impl::schedulable_promise& promise) noexcept override;
+    void schedule(schedulable_promise& promise) noexcept override;
 
 private:
     void worker_function(std::shared_ptr<worker> thread) noexcept;

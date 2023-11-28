@@ -12,10 +12,11 @@
 namespace asyncpp {
 
 namespace impl_event {
+    
     template <class T>
     class promise {
     public:
-        struct awaitable : impl::basic_awaitable<T> {
+        struct awaitable : basic_awaitable<T> {
             awaitable* m_next = nullptr;
 
             awaitable(promise* owner) noexcept : m_owner(owner) {}
@@ -24,14 +25,14 @@ namespace impl_event {
                 return m_owner->ready();
             }
 
-            template <std::convertible_to<const impl::resumable_promise&> Promise>
+            template <std::convertible_to<const resumable_promise&> Promise>
             bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept {
                 m_enclosing = &enclosing.promise();
                 const bool ready = m_owner->await(this);
                 return !ready;
             }
 
-            auto await_resume() -> typename impl::task_result<T>::reference {
+            auto await_resume() -> typename task_result<T>::reference {
                 return m_owner->get_result().get_or_throw();
             }
 
@@ -40,7 +41,7 @@ namespace impl_event {
             }
 
         private:
-            impl::resumable_promise* m_enclosing = nullptr;
+            resumable_promise* m_enclosing = nullptr;
             promise* m_owner = nullptr;
         };
 
@@ -51,7 +52,7 @@ namespace impl_event {
         promise& operator=(promise&&) = delete;
         promise& operator=(const promise&) = delete;
 
-        void set(impl::task_result<T> result) noexcept {
+        void set(task_result<T> result) noexcept {
             m_result = std::move(result);
             finalize();
         }
@@ -85,7 +86,7 @@ namespace impl_event {
         }
 
     private:
-        impl::task_result<T> m_result;
+        task_result<T> m_result;
         atomic_collection<awaitable, &awaitable::m_next> m_awaiters;
     };
 
