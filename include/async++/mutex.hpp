@@ -20,7 +20,7 @@ class mutex {
         bool await_ready() noexcept;
         template <std::convertible_to<const resumable_promise&> Promise>
         bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept;
-        mutex_lock<mutex> await_resume() noexcept;
+        locked_mutex<mutex> await_resume() noexcept;
         void on_ready() noexcept;
 
     private:

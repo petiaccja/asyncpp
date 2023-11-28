@@ -67,7 +67,7 @@ struct schedulable_promise {
 
 
 template <class T>
-struct return_promise {
+struct result_promise {
     task_result<T> m_result;
 
     void unhandled_exception() noexcept {
@@ -80,7 +80,7 @@ struct return_promise {
 
 
 template <>
-struct return_promise<void> {
+struct result_promise<void> {
     task_result<void> m_result;
 
     void unhandled_exception() noexcept {

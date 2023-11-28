@@ -25,7 +25,7 @@ namespace impl_shared_task {
     };
 
     template <class T>
-    struct promise : resumable_promise, schedulable_promise, return_promise<T> {
+    struct promise : result_promise<T>, resumable_promise, schedulable_promise {
         struct final_awaitable {
             constexpr bool await_ready() const noexcept { return false; }
             void await_suspend(std::coroutine_handle<promise> handle) noexcept {

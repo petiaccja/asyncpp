@@ -10,7 +10,7 @@ bool mutex::awaitable::await_ready() noexcept {
 }
 
 
-mutex_lock<mutex> mutex::awaitable::await_resume() noexcept {
+locked_mutex<mutex> mutex::awaitable::await_resume() noexcept {
     return { m_mtx };
 }
 

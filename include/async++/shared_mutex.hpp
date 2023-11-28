@@ -31,7 +31,7 @@ class shared_mutex {
         bool await_ready() noexcept;
         template <std::convertible_to<const resumable_promise&> Promise>
         bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept;
-        mutex_lock<shared_mutex> await_resume() noexcept;
+        locked_mutex<shared_mutex> await_resume() noexcept;
         void on_ready() noexcept final;
         bool is_shared() const noexcept final;
 
@@ -45,7 +45,7 @@ class shared_mutex {
         bool await_ready() noexcept;
         template <std::convertible_to<const resumable_promise&> Promise>
         bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept;
-        mutex_shared_lock<shared_mutex> await_resume() noexcept;
+        locked_mutex_shared<shared_mutex> await_resume() noexcept;
         void on_ready() noexcept final;
         bool is_shared() const noexcept final;
 
