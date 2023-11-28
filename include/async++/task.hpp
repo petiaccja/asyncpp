@@ -5,9 +5,10 @@
 #include "promise.hpp"
 #include "scheduler.hpp"
 
+#include <atomic>
 #include <cassert>
 #include <coroutine>
-#include <future>
+#include <limits>
 #include <utility>
 
 
@@ -26,20 +27,14 @@ namespace impl_task {
     struct promise : return_promise<T>, resumable_promise, schedulable_promise {
         struct final_awaitable {
             constexpr bool await_ready() const noexcept { return false; }
-            bool await_suspend(std::coroutine_handle<promise> handle) const noexcept {
+            void await_suspend(std::coroutine_handle<promise> handle) const noexcept {
                 auto& owner = handle.promise();
                 const auto state = INTERLEAVED(owner.m_state.exchange(READY));
-                assert(state != CREATED && state != READY); // May be RUNNING || RELEASED || AWAITED
-                if (state == RUNNING) {
-                    return true;
-                }
-                else if (state == RELEASED) {
-                    return false;
-                }
-                else {
+                assert(state != CREATED && state != READY); // May be RUNNING || AWAITED
+                if (state != RUNNING) {
                     state->on_ready();
-                    return false;
                 }
+                owner.release();
             }
             constexpr void await_resume() const noexcept {}
         };
@@ -48,7 +43,8 @@ namespace impl_task {
             return task<T>(this);
         }
 
-        constexpr auto initial_suspend() const noexcept {
+        constexpr auto initial_suspend() noexcept {
+            m_released.test_and_set();
             return std::suspend_always{};
         }
 
@@ -56,18 +52,15 @@ namespace impl_task {
             auto created = CREATED;
             const bool success = INTERLEAVED(m_state.compare_exchange_strong(created, RUNNING));
             if (success) {
+                m_released.clear();
                 resume();
             }
         }
 
         bool await(basic_awaitable<T>* awaiter) noexcept {
+            start();
             auto state = INTERLEAVED(m_state.exchange(awaiter));
             assert(state == CREATED || state == RUNNING || state == READY);
-            if (state == CREATED) {
-                INTERLEAVED(m_state.store(RUNNING));
-                resume();
-                state = INTERLEAVED(m_state.exchange(awaiter));
-            }
             if (state == READY) {
                 INTERLEAVED(m_state.store(READY));
             }
@@ -75,9 +68,8 @@ namespace impl_task {
         }
 
         void release() noexcept {
-            const auto state = INTERLEAVED(m_state.exchange(RELEASED));
-            assert(state == CREATED || state == RUNNING || state == READY);
-            if (state == CREATED || state == READY) {
+            const auto released = m_released.test_and_set();
+            if (released) {
                 handle().destroy();
             }
         }
@@ -96,7 +88,7 @@ namespace impl_task {
 
         void resume() final {
             [[maybe_unused]] const auto state = m_state.load();
-            assert(state != READY && state != RELEASED);
+            assert(state != READY);
             return m_scheduler ? m_scheduler->schedule(*this) : handle().resume();
         }
 
@@ -108,21 +100,20 @@ namespace impl_task {
         static inline const auto CREATED = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 14);
         static inline const auto RUNNING = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 13);
         static inline const auto READY = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 12);
-        static inline const auto RELEASED = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 11);
         std::atomic<basic_awaitable<T>*> m_state = CREATED;
+        std::atomic_flag m_released;
     };
 
 
     template <class T>
     struct awaitable : basic_awaitable<T> {
-        task_result<T> m_result;
         promise<T>* m_awaited = nullptr;
         resumable_promise* m_enclosing = nullptr;
 
         awaitable(promise<T>* awaited) : m_awaited(awaited) {}
 
         constexpr bool await_ready() const noexcept {
-            return false;
+            return m_awaited->ready();
         }
 
         template <std::convertible_to<const resumable_promise&> Promise>
@@ -133,20 +124,17 @@ namespace impl_task {
         }
 
         T await_resume() {
-            if (!m_result.has_value()) {
-                m_result = m_awaited->get_result();
-                m_awaited->release();
-            }
+            auto result = m_awaited->get_result();
+            m_awaited->release();
             if constexpr (!std::is_void_v<T>) {
-                return std::forward<T>(m_result.get_or_throw());
+                return std::forward<T>(result.get_or_throw());
             }
             else {
-                m_result.get_or_throw();
+                return result.get_or_throw();
             }
         }
 
         void on_ready() noexcept final {
-            m_result = m_awaited->get_result();
             m_enclosing->resume();
         }
     };

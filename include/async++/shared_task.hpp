@@ -1,13 +1,12 @@
 #pragma once
 
 #include "awaitable.hpp"
+#include "container/atomic_collection.hpp"
 #include "interleaving/sequence_point.hpp"
 #include "promise.hpp"
 #include "scheduler.hpp"
-#include "container/atomic_collection.hpp"
 
 #include <cassert>
-#include <future>
 #include <utility>
 
 
@@ -35,11 +34,8 @@ namespace impl_shared_task {
                 auto& owner = handle.promise();
 
                 auto awaiting = INTERLEAVED(owner.m_awaiting.close());
-                const auto state = INTERLEAVED(owner.m_state.exchange(owner.READY));
                 while (awaiting != nullptr) {
-                    if (!(state == owner.EXCLUDE_FIRST && awaiting->m_next == nullptr)) {
-                        awaiting->on_ready();
-                    }
+                    awaiting->on_ready();
                     awaiting = awaiting->m_next;
                 }
 
@@ -53,32 +49,20 @@ namespace impl_shared_task {
         }
 
         auto initial_suspend() noexcept {
-            acquire();
             return std::suspend_always{};
         }
 
         void start() noexcept {
-            auto created = CREATED;
-            const bool success = INTERLEAVED(m_state.compare_exchange_strong(created, RUNNING));
-            if (success) {
+            const bool has_started = INTERLEAVED(m_started.test_and_set());
+            if (!has_started) {
+                acquire();
                 resume();
             }
         }
 
         bool await(chained_awaitable<T>* awaiter) {
+            start();
             const auto previous = INTERLEAVED(m_awaiting.push(awaiter));
-            if (previous == nullptr) {
-                auto created = CREATED;
-                const bool was_created = INTERLEAVED(m_state.compare_exchange_strong(created, EXCLUDE_FIRST));
-                if (was_created == CREATED) {
-                    resume();
-                    auto exclude_first = EXCLUDE_FIRST;
-                    INTERLEAVED(m_state.compare_exchange_strong(exclude_first, RUNNING));
-                    if (exclude_first == READY) {
-                        return true;
-                    }
-                }
-            }
             return m_awaiting.closed(previous);
         }
 
@@ -114,31 +98,21 @@ namespace impl_shared_task {
         }
 
     private:
-        static constexpr int CREATED = 1;
-        static constexpr int RUNNING = 2;
-        static constexpr int EXCLUDE_FIRST = 3;
-        static constexpr int READY = 4;
         std::atomic_size_t m_references = 0;
-        std::atomic_int m_state = CREATED;
+        std::atomic_flag m_started;
         atomic_collection<chained_awaitable<T>, &chained_awaitable<T>::m_next> m_awaiting;
     };
 
 
     template <class T>
     struct awaitable : chained_awaitable<T> {
-        task_result<T> m_result;
         promise<T>* m_awaited = nullptr;
         resumable_promise* m_enclosing = nullptr;
 
-        awaitable(promise<T>* awaited) : m_awaited(awaited) {
-            m_awaited->acquire();
-        }
-        ~awaitable() override {
-            m_awaited->release();
-        }
+        awaitable(promise<T>* awaited) : m_awaited(awaited) {}
 
         constexpr bool await_ready() const noexcept {
-            return false;
+            return m_awaited->ready();
         }
 
         template <std::convertible_to<const resumable_promise&> Promise>

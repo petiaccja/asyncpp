@@ -99,6 +99,16 @@ TEST_CASE("Shared task: interleaving abandon", "[Shared task]") {
 }
 
 
+TEST_CASE("Shared task: abandon (not started)", "[Shared task]") {
+    static const auto coro = [](leak_tester tester) -> shared_task<void> {
+        co_return;
+    };
+    leak_tester tester;
+    static_cast<void>(coro(tester));
+    REQUIRE(tester);
+}
+
+
 TEST_CASE("Shared task: co_await value", "[Shared task]") {
     static const auto coro = [](int value) -> shared_task<int> {
         co_return value;

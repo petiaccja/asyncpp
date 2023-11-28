@@ -31,6 +31,13 @@ class mutex {
     bool lock_enqueue(awaitable* waiting);
 
 public:
+    mutex() = default;
+    mutex(const mutex&) = delete;
+    mutex(mutex&&) = delete;
+    mutex& operator=(const mutex&) = delete;
+    mutex& operator=(mutex&&) = delete;
+    ~mutex();
+
     bool try_lock() noexcept;
     awaitable unique() noexcept;
     awaitable operator co_await() noexcept;

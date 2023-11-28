@@ -12,6 +12,7 @@ TEST_CASE("Mutex: try lock", "[Mutex]") {
     static const auto coro = [](mutex& mtx) -> task<void> {
         REQUIRE(mtx.try_lock());
         REQUIRE(!mtx.try_lock());
+        mtx.unlock();
         co_return;
     };
 
@@ -24,6 +25,7 @@ TEST_CASE("Mutex: lock", "[Mutex]") {
     static const auto coro = [](mutex& mtx) -> task<void> {
         co_await mtx;
         REQUIRE(!mtx.try_lock());
+        mtx.unlock();
     };
 
     mutex mtx;
@@ -36,6 +38,7 @@ TEST_CASE("Mutex: unlock", "[Mutex]") {
         co_await mtx;
         mtx.unlock();
         REQUIRE(mtx.try_lock());
+        mtx.unlock();
     };
 
     mutex mtx;
@@ -103,6 +106,7 @@ TEST_CASE("Mutex: unique lock destroy", "[Shared mutex]") {
             REQUIRE(lk.owns_lock());
         }
         REQUIRE(mtx.try_lock());
+        mtx.unlock();
         co_return;
     };
 

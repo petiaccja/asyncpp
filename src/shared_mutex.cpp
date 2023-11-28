@@ -47,6 +47,13 @@ bool shared_mutex::shared_awaitable::is_shared() const noexcept {
 }
 
 
+shared_mutex::~shared_mutex() {
+    std::lock_guard lk(m_spinlock);
+    if (m_locked != 0) {
+        std::terminate();
+    }
+}
+
 bool shared_mutex::try_lock() noexcept {
     std::lock_guard lk(m_spinlock);
     if (m_locked == 0) {

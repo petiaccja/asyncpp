@@ -14,7 +14,6 @@ TEST_CASE("Sequence point: only initial points", "[Sequence point]") {
     const auto func2 = [] {};
     size_t count = 0;
     for (auto interleaving_ : interleaving::run_all({ func1, func2 })) {
-        std::cout << interleaving::interleaving_printer{ interleaving_ } << std::endl;
         ++count;
     }
     REQUIRE(count == 2);
@@ -36,7 +35,6 @@ void test_func_2() {
 TEST_CASE("Sequence point: linear multiple points", "[Sequence point]") {
     size_t count = 0;
     for (auto interleaving_ : interleaving::run_all({ &test_func_1, &test_func_2 })) {
-        std::cout << interleaving::interleaving_printer{ interleaving_ } << std::endl;
         ++count;
     }
     REQUIRE(count == 15);
@@ -62,7 +60,6 @@ TEST_CASE("Sequence point: branching", "[Sequence point]") {
     auto fixture = std::function([] { return std::make_shared<std::atomic_bool>(false); });
     size_t count = 0;
     for (auto interleaving_ : interleaving::run_all(fixture, std::vector{ std::function(test_func_branch_1), std::function(test_func_branch_2) })) {
-        std::cout << interleaving::interleaving_printer{ interleaving_ } << std::endl;
         ++count;
     }
     REQUIRE(count == 3);
