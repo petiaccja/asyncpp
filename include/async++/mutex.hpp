@@ -18,14 +18,14 @@ class mutex {
 
         awaitable(mutex* mtx) : m_mtx(mtx) {}
         bool await_ready() noexcept;
-        template <std::convertible_to<const impl::resumable_promise&> Promise>
+        template <std::convertible_to<const resumable_promise&> Promise>
         bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept;
-        mutex_lock<mutex> await_resume() noexcept;
+        locked_mutex<mutex> await_resume() noexcept;
         void on_ready() noexcept;
 
     private:
         mutex* m_mtx;
-        impl::resumable_promise* m_enclosing = nullptr;
+        resumable_promise* m_enclosing = nullptr;
     };
 
     bool lock_enqueue(awaitable* waiting);
@@ -50,7 +50,7 @@ private:
 };
 
 
-template <std::convertible_to<const impl::resumable_promise&> Promise>
+template <std::convertible_to<const resumable_promise&> Promise>
 bool mutex::awaitable::await_suspend(std::coroutine_handle<Promise> enclosing) noexcept {
     m_enclosing = &enclosing.promise();
     const bool ready = m_mtx->lock_enqueue(this);

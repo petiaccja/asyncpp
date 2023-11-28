@@ -21,8 +21,6 @@ class stream;
 
 
 namespace impl_stream {
-    using namespace impl;
-
 
     template <class T>
     struct promise : resumable_promise, schedulable_promise {

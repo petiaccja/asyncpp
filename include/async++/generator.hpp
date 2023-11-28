@@ -1,6 +1,6 @@
 #pragma once
 
-#include "awaitable.hpp"
+#include "promise.hpp"
 
 #include <cassert>
 #include <coroutine>
@@ -15,8 +15,6 @@ class generator;
 
 
 namespace impl_generator {
-
-    using namespace impl;
 
     template <class T>
     struct promise {

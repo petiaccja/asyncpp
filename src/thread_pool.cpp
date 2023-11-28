@@ -29,7 +29,7 @@ thread_pool::~thread_pool() noexcept {
 }
 
 
-void thread_pool::schedule(impl::schedulable_promise& promise) noexcept {
+void thread_pool::schedule(schedulable_promise& promise) noexcept {
     if (m_free_workers.empty() && local_owner == this) {
         local_worker->add_work_item(promise);
     }
@@ -52,7 +52,7 @@ void thread_pool::worker_function(std::shared_ptr<worker> w) noexcept {
     local_worker = w;
     local_owner = this;
 
-    impl::schedulable_promise* promise;
+    schedulable_promise* promise;
     do {
         promise = w->get_work_item();
 
@@ -71,12 +71,12 @@ void thread_pool::worker_function(std::shared_ptr<worker> w) noexcept {
 }
 
 
-void thread_pool::worker::add_work_item(impl::schedulable_promise& promise) {
+void thread_pool::worker::add_work_item(schedulable_promise& promise) {
     m_work_items.push(&promise);
 }
 
 
-impl::schedulable_promise* thread_pool::worker::get_work_item() {
+schedulable_promise* thread_pool::worker::get_work_item() {
     return m_work_items.pop();
 }
 

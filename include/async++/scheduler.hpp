@@ -9,7 +9,7 @@ namespace asyncpp {
 class scheduler {
 public:
     virtual ~scheduler() = default;
-    virtual void schedule(impl::schedulable_promise& promise) = 0;
+    virtual void schedule(schedulable_promise& promise) = 0;
 };
 
 

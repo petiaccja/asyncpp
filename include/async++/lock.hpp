@@ -9,39 +9,39 @@
 namespace asyncpp {
 
 template <class Mutex>
-class mutex_lock {
+class locked_mutex {
     friend Mutex;
 
 public:
-    mutex_lock(mutex_lock&&) = default;
-    mutex_lock& operator=(mutex_lock&&) = default;
-    mutex_lock(const mutex_lock&) = delete;
-    mutex_lock& operator=(const mutex_lock&) = delete;
+    locked_mutex(locked_mutex&&) = default;
+    locked_mutex& operator=(locked_mutex&&) = default;
+    locked_mutex(const locked_mutex&) = delete;
+    locked_mutex& operator=(const locked_mutex&) = delete;
     Mutex& mutex() const noexcept {
         return *m_mtx;
     }
 
 private:
-    mutex_lock(Mutex* mtx) : m_mtx(mtx) {}
+    locked_mutex(Mutex* mtx) : m_mtx(mtx) {}
     Mutex* m_mtx = nullptr;
 };
 
 
 template <class Mutex>
-class mutex_shared_lock {
+class locked_mutex_shared {
     friend Mutex;
 
 public:
-    mutex_shared_lock(mutex_shared_lock&&) = default;
-    mutex_shared_lock& operator=(mutex_shared_lock&&) = default;
-    mutex_shared_lock(const mutex_shared_lock&) = delete;
-    mutex_shared_lock& operator=(const mutex_shared_lock&) = delete;
+    locked_mutex_shared(locked_mutex_shared&&) = default;
+    locked_mutex_shared& operator=(locked_mutex_shared&&) = default;
+    locked_mutex_shared(const locked_mutex_shared&) = delete;
+    locked_mutex_shared& operator=(const locked_mutex_shared&) = delete;
     Mutex& mutex() const noexcept {
         return *m_mtx;
     }
 
 private:
-    mutex_shared_lock(Mutex* mtx) : m_mtx(mtx) {}
+    locked_mutex_shared(Mutex* mtx) : m_mtx(mtx) {}
     Mutex* m_mtx = nullptr;
 };
 
@@ -70,7 +70,7 @@ class unique_lock {
 
 public:
     unique_lock(Mutex& mtx) noexcept : m_mtx(&mtx) {}
-    unique_lock(mutex_lock<Mutex>&& lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
+    unique_lock(locked_mutex<Mutex>&& lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
     unique_lock(unique_lock&& rhs) noexcept : m_mtx(rhs.m_mtx), m_owned(rhs.m_owned) {
         rhs.m_mtx = nullptr;
         rhs.m_owned = false;
@@ -127,7 +127,7 @@ private:
 
 
 template <class Mutex>
-unique_lock(mutex_lock<Mutex>&& lk) -> unique_lock<Mutex>;
+unique_lock(locked_mutex<Mutex>&& lk) -> unique_lock<Mutex>;
 
 
 template <class Mutex>
@@ -154,7 +154,7 @@ class shared_lock {
 
 public:
     shared_lock(Mutex& mtx) noexcept : m_mtx(&mtx) {}
-    shared_lock(mutex_shared_lock<Mutex> lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
+    shared_lock(locked_mutex_shared<Mutex> lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
     shared_lock(shared_lock&& rhs) noexcept : m_mtx(rhs.m_mtx), m_owned(rhs.m_owned) {
         rhs.m_mtx = nullptr;
         rhs.m_owned = false;
@@ -211,7 +211,7 @@ private:
 
 
 template <class Mutex>
-shared_lock(mutex_shared_lock<Mutex> lk) -> shared_lock<Mutex>;
+shared_lock(locked_mutex_shared<Mutex> lk) -> shared_lock<Mutex>;
 
 
 } // namespace asyncpp

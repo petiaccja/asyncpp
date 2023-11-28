@@ -17,7 +17,7 @@ namespace impl_join {
     struct joiner;
 
     template <class T>
-    struct basic_promise : impl::resumable_promise {
+    struct basic_promise : resumable_promise {
         std::promise<T> m_promise;
 
         joiner<T> get_return_object() {

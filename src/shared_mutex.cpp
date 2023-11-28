@@ -10,7 +10,7 @@ bool shared_mutex::awaitable::await_ready() noexcept {
 }
 
 
-mutex_lock<shared_mutex> shared_mutex::awaitable::await_resume() noexcept {
+locked_mutex<shared_mutex> shared_mutex::awaitable::await_resume() noexcept {
     return { m_mtx };
 }
 
@@ -31,7 +31,7 @@ bool shared_mutex::shared_awaitable::await_ready() noexcept {
 }
 
 
-mutex_shared_lock<shared_mutex> shared_mutex::shared_awaitable::await_resume() noexcept {
+locked_mutex_shared<shared_mutex> shared_mutex::shared_awaitable::await_resume() noexcept {
     return { m_mtx };
 }
 
