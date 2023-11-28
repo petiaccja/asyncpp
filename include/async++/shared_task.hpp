@@ -114,7 +114,7 @@ namespace impl_shared_task {
         }
 
         template <std::convertible_to<const resumable_promise&> Promise>
-        bool await_suspend(std::coroutine_handle<Promise> enclosing) {
+        bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept {
             m_enclosing = &enclosing.promise();
             const bool ready = m_awaited->await(this);
             return !ready;
