@@ -36,7 +36,6 @@ TEST_CASE("Event: co_await interleaving", "[Event]") {
     for ([[maybe_unused]] const auto& il : gen) {
         ++count;
         INFO((interleaving::interleaving_printer{ il, true }));
-        std::cout << (interleaving::interleaving_printer{ il, false }) << std::endl;
     }
     REQUIRE(count >= 3);
 }

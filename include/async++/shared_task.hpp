@@ -49,13 +49,13 @@ namespace impl_shared_task {
         }
 
         auto initial_suspend() noexcept {
-            acquire();
             return std::suspend_always{};
         }
 
         void start() noexcept {
             const bool has_started = INTERLEAVED(m_started.test_and_set());
             if (!has_started) {
+                acquire();
                 resume();
             }
         }
@@ -106,7 +106,6 @@ namespace impl_shared_task {
 
     template <class T>
     struct awaitable : chained_awaitable<T> {
-        task_result<T> m_result;
         promise<T>* m_awaited = nullptr;
         resumable_promise* m_enclosing = nullptr;
 

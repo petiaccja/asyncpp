@@ -3,6 +3,7 @@
 #include <async++/interleaving/sequencer.hpp>
 #include <async++/interleaving/state_tree.hpp>
 
+#include <csignal>
 #include <format>
 #include <map>
 #include <ranges>
@@ -28,6 +29,18 @@ namespace impl_sp {
     sequence_point final_point{ .acquire = false, .name = "<finish>", .file = __FILE__, .line = __LINE__ };
     thread_local std::shared_ptr<sequencer> local_sequencer;
     thread_local filter local_filter;
+
+
+    interleaving* g_current_interleaving = nullptr;
+
+
+    void signal_handler(int sig) {
+        if (g_current_interleaving) {
+            std::cout << interleaving_printer{ *g_current_interleaving, true } << std::endl;
+            g_current_interleaving = nullptr;
+        }
+        std::quick_exit(-1);
+    }
 
 
     template <class Func>
@@ -135,6 +148,10 @@ namespace impl_sp {
 
         std::vector path = { tree };
         interleaving interleaving;
+
+        g_current_interleaving = &interleaving;
+        const auto prev_handler = std::signal(SIGABRT, &signal_handler);
+
         std::shared_ptr<sequencer> selected;
         do {
             try {
@@ -186,6 +203,9 @@ namespace impl_sp {
         for (const auto& exec_thread : sequencers) {
             exec_thread->allow();
         }
+
+        std::signal(SIGABRT, prev_handler);
+        g_current_interleaving = nullptr;
 
         return interleaving;
     }
