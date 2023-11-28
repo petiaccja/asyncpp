@@ -42,7 +42,7 @@ namespace impl_task {
         }
 
         constexpr auto initial_suspend() noexcept {
-            m_released.test_and_set();
+            INTERLEAVED(m_released.test_and_set());
             return std::suspend_always{};
         }
 
@@ -66,7 +66,7 @@ namespace impl_task {
         }
 
         void release() noexcept {
-            const auto released = m_released.test_and_set();
+            const auto released = INTERLEAVED(m_released.test_and_set());
             if (released) {
                 handle().destroy();
             }
@@ -85,7 +85,7 @@ namespace impl_task {
         }
 
         void resume() final {
-            [[maybe_unused]] const auto state = m_state.load();
+            [[maybe_unused]] const auto state = INTERLEAVED(m_state.load());
             assert(state != READY);
             return m_scheduler ? m_scheduler->schedule(*this) : handle().resume();
         }

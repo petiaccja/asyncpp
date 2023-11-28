@@ -1,5 +1,4 @@
-#include "leak_tester.hpp"
-#include "test_schedulers.hpp"
+#include "helper_interleaving.hpp"
 
 #include <async++/interleaving/runner.hpp>
 #include <async++/join.hpp>
@@ -12,90 +11,26 @@ using namespace asyncpp;
 
 
 TEST_CASE("Shared task: interleaving co_await", "[Shared task]") {
-    static const auto do_worker_task = [](leak_tester tester) -> shared_task<int> {
+    static const auto sub_task = [](leak_tester tester) -> shared_task<int> {
         co_return 3;
     };
-    static const auto do_main_task = [](shared_task<int> task) -> shared_task<int> {
-        task.launch();
-        co_return co_await task;
-    };
-
-    struct fixture {
-        thread_locked_scheduler worker_sched;
-        thread_locked_scheduler main_sched;
-        shared_task<int> main_task;
+    static const auto main_task = [](shared_task<int> tsk) -> shared_task<int> {
+        tsk.launch();
+        co_return co_await tsk;
     };
 
     leak_tester tester;
-
-    auto make_fixture = [&tester] {
-        auto f = std::make_shared<fixture>();
-        auto worker_task = do_worker_task(tester);
-        bind(worker_task, f->worker_sched);
-        f->main_task = do_main_task(std::move(worker_task));
-        f->main_task.bind(f->main_sched);
-        return f;
-    };
-
-    auto worker_thread = [](std::shared_ptr<fixture> f) {
-        INTERLEAVED_ACQUIRE(f->worker_sched.wait_and_resume());
-    };
-    auto main_thread = [](std::shared_ptr<fixture> f) {
-        f->main_task.launch();
-        INTERLEAVED_ACQUIRE(f->main_sched.wait_and_resume());
-        if (!f->main_task.ready()) {
-            INTERLEAVED_ACQUIRE(f->main_sched.wait_and_resume());
-        }
-    };
-
-    auto gen = interleaving::run_all(std::function(make_fixture),
-                                     std::vector{ std::function(worker_thread), std::function(main_thread) },
-                                     { "$worker", "$main" });
-    size_t count = 0;
-    for ([[maybe_unused]] const auto& il : gen) {
-        ++count;
-        INFO((interleaving::interleaving_printer{ il, true }));
-        REQUIRE(tester);
-    }
-    REQUIRE(count >= 3);
+    auto interleavings = run_dependent_tasks(main_task, sub_task, std::tuple{}, std::tuple{ tester });
+    evaluate_interleavings(std::move(interleavings), std::move(tester));
 }
 
 
 TEST_CASE("Shared task: interleaving abandon", "[Shared task]") {
-    static const auto do_task = [](leak_tester value) -> shared_task<int> { co_return 3; };
-
-    struct fixture {
-        thread_locked_scheduler sched;
-        shared_task<int> task;
-    };
+    static const auto abandoned_task = [](leak_tester value) -> shared_task<int> { co_return 3; };
 
     leak_tester tester;
-
-    auto make_fixture = [&tester] {
-        auto f = std::make_shared<fixture>();
-        f->task = do_task(tester);
-        bind(f->task, f->sched);
-        return f;
-    };
-
-    auto sync_thread = [](std::shared_ptr<fixture> f) {
-        f->task.launch();
-        f->task = {};
-    };
-    auto task_thread = [](std::shared_ptr<fixture> f) {
-        INTERLEAVED_ACQUIRE(f->sched.wait_and_resume());
-    };
-
-    auto gen = interleaving::run_all(std::function(make_fixture),
-                                     std::vector{ std::function(sync_thread), std::function(task_thread) },
-                                     { "$sync", "$task" });
-    size_t count = 0;
-    for ([[maybe_unused]] const auto& il : gen) {
-        ++count;
-        INFO((interleaving::interleaving_printer{ il, true }));
-        REQUIRE(tester);
-    }
-    REQUIRE(count >= 3);
+    auto interleavings = run_abandoned_task(abandoned_task, std::tuple{ tester });
+    evaluate_interleavings(std::move(interleavings), std::move(tester));
 }
 
 

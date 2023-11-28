@@ -92,7 +92,7 @@ namespace impl_shared_task {
         }
 
         bool ready() const {
-            return m_awaiting.closed();
+            return INTERLEAVED(m_awaiting.closed());
         }
 
     private:

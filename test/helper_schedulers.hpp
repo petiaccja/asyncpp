@@ -14,10 +14,14 @@ public:
         m_promise.store(&promise);
     }
 
-    void wait_and_resume() {
-        asyncpp::schedulable_promise* promise;
-        while (!(promise = m_promise.exchange(nullptr))) {
+    void wait() {
+        while (nullptr == m_promise.load()) {
         }
+    }
+
+    void resume() {
+        const auto promise = m_promise.exchange(nullptr);
+        assert(promise != nullptr);
         promise->handle().resume();
     }
 

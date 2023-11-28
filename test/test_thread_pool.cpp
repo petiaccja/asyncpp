@@ -1,5 +1,3 @@
-#include "test_schedulers.hpp"
-
 #include <async++/join.hpp>
 #include <async++/task.hpp>
 #include <async++/thread_pool.hpp>
