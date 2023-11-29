@@ -23,7 +23,7 @@ thread_pool::thread_pool(size_t num_threads) {
 
 thread_pool::~thread_pool() noexcept {
     std::ranges::for_each(m_workers, [](auto& w) {
-        w->terminate();
+        w->stop();
         w->wake();
     });
 }
@@ -67,7 +67,7 @@ void thread_pool::worker_function(std::shared_ptr<worker> w) noexcept {
             m_free_workers.push(w.get());
             w->wait();
         }
-    } while (promise || !w->is_terminated());
+    } while (promise || !w->is_stopped());
 }
 
 
@@ -86,12 +86,12 @@ bool thread_pool::worker::has_work() const {
 }
 
 
-bool thread_pool::worker::is_terminated() const {
+bool thread_pool::worker::is_stopped() const {
     return m_terminated.test();
 }
 
 
-void thread_pool::worker::terminate() {
+void thread_pool::worker::stop() {
     m_terminated.test_and_set();
 }
 
@@ -104,7 +104,7 @@ void thread_pool::worker::wake() const {
 
 void thread_pool::worker::wait() const {
     std::unique_lock lk(m_wake_mutex);
-    m_wake_cv.wait(lk, [this] { return has_work() || is_terminated(); });
+    m_wake_cv.wait(lk, [this] { return has_work() || is_stopped(); });
 }
 
 

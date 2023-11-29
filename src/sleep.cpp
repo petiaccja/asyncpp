@@ -43,14 +43,15 @@ namespace impl_sleep {
 
     private:
         void awake(std::stop_token token) {
+            const auto stop_condition = [&] { return token.stop_requested() || !m_queue.empty(); };
             while (!token.stop_requested()) {
                 std::unique_lock lk(m_mtx);
                 if (m_queue.empty()) {
-                    m_cvar.wait(lk);
+                    m_cvar.wait(lk, stop_condition);
                 }
                 else {
                     const auto next = m_queue.top();
-                    m_cvar.wait_until(lk, next->get_time());
+                    m_cvar.wait_until(lk, next->get_time(), stop_condition);
                     if (next->get_time() <= clock_type::now()) {
                         m_queue.pop();
                         lk.unlock();

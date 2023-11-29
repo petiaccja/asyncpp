@@ -21,8 +21,8 @@ class thread_pool : public scheduler {
         void add_work_item(schedulable_promise& promise);
         schedulable_promise* get_work_item();
         bool has_work() const;
-        bool is_terminated() const;
-        void terminate();
+        bool is_stopped() const;
+        void stop();
         void wake() const;
         void wait() const;
 

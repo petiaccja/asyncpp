@@ -1,3 +1,5 @@
+#include "helper_interleaving.hpp"
+
 #include <async++/event.hpp>
 #include <async++/interleaving/runner.hpp>
 #include <async++/task.hpp>
@@ -9,7 +11,7 @@
 using namespace asyncpp;
 
 
-TEST_CASE("Event: co_await interleaving", "[Event]") {
+TEST_CASE("Event: interleave co_await | set", "[Event]") {
     struct fixture {
         event<int> evt;
     };
@@ -32,10 +34,5 @@ TEST_CASE("Event: co_await interleaving", "[Event]") {
     auto gen = interleaving::run_all(std::function(make_fixture),
                                      std::vector{ std::function(wait_thread), std::function(set_thread) },
                                      { "$wait", "$set" });
-    size_t count = 0;
-    for ([[maybe_unused]] const auto& il : gen) {
-        ++count;
-        INFO((interleaving::interleaving_printer{ il, true }));
-    }
-    REQUIRE(count >= 3);
+    evaluate_interleavings(std::move(gen));
 }
