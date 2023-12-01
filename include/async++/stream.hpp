@@ -23,7 +23,7 @@ class stream;
 namespace impl_stream {
 
     template <class T>
-    struct promise : resumable_promise, schedulable_promise {
+    struct promise : resumable_promise, schedulable_promise, impl::leak_checked_promise {
         struct yield_awaitable {
             constexpr bool await_ready() const noexcept {
                 return false;

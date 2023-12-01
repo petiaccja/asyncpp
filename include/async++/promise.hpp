@@ -2,7 +2,9 @@
 
 #include "awaitable.hpp"
 
+#include <atomic>
 #include <coroutine>
+#include <utility>
 
 
 namespace asyncpp {
@@ -90,5 +92,40 @@ struct result_promise<void> {
         m_result = nullptr;
     }
 };
+
+
+namespace impl {
+
+    class leak_checked_promise {
+        using snapshot_type = std::pair<intptr_t, intptr_t>;
+
+    public:
+#ifdef ASYNCPP_BUILD_TESTS
+        leak_checked_promise() { num_alive.fetch_add(1, std::memory_order_relaxed); }
+        leak_checked_promise(const leak_checked_promise&) : leak_checked_promise() {}
+        leak_checked_promise(leak_checked_promise&&) : leak_checked_promise() {}
+        leak_checked_promise& operator=(const leak_checked_promise&) { return *this; }
+        leak_checked_promise& operator=(leak_checked_promise&&) { return *this; }
+        ~leak_checked_promise() {
+            num_alive.fetch_sub(1, std::memory_order_relaxed);
+            version.fetch_add(1, std::memory_order_relaxed);
+        }
+#endif
+
+        static snapshot_type snapshot() {
+            return { num_alive.load(std::memory_order_relaxed), version.load(std::memory_order_relaxed) };
+        }
+
+        static bool check(snapshot_type s) {
+            const auto current = snapshot();
+            return current.first == s.first && current.second > s.second;
+        }
+
+    private:
+        inline static std::atomic_intptr_t num_alive = 0;
+        inline static std::atomic_intptr_t version = 0;
+    };
+
+} // namespace impl
 
 } // namespace asyncpp

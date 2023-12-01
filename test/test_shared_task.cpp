@@ -11,7 +11,7 @@ using namespace asyncpp;
 
 
 TEST_CASE("Shared task: interleaving co_await", "[Shared task]") {
-    static const auto sub_task = [](leak_tester tester) -> shared_task<int> {
+    static const auto sub_task = []() -> shared_task<int> {
         co_return 3;
     };
     static const auto main_task = [](shared_task<int> tsk) -> shared_task<int> {
@@ -19,28 +19,26 @@ TEST_CASE("Shared task: interleaving co_await", "[Shared task]") {
         co_return co_await tsk;
     };
 
-    leak_tester tester;
-    auto interleavings = run_dependent_tasks(main_task, sub_task, std::tuple{}, std::tuple{ tester });
-    evaluate_interleavings(std::move(interleavings), std::move(tester));
+    auto interleavings = run_dependent_tasks(main_task, sub_task, std::tuple{}, std::tuple{});
+    evaluate_interleavings(std::move(interleavings));
 }
 
 
 TEST_CASE("Shared task: interleaving abandon", "[Shared task]") {
-    static const auto abandoned_task = [](leak_tester value) -> shared_task<int> { co_return 3; };
+    static const auto abandoned_task = []() -> shared_task<int> { co_return 3; };
 
-    leak_tester tester;
-    auto interleavings = run_abandoned_task(abandoned_task, std::tuple{ tester });
-    evaluate_interleavings(std::move(interleavings), std::move(tester));
+    auto interleavings = run_abandoned_task(abandoned_task, std::tuple{});
+    evaluate_interleavings(std::move(interleavings));
 }
 
 
 TEST_CASE("Shared task: abandon (not started)", "[Shared task]") {
-    static const auto coro = [](leak_tester tester) -> shared_task<void> {
+    static const auto coro = []() -> shared_task<void> {
         co_return;
     };
-    leak_tester tester;
-    static_cast<void>(coro(tester));
-    REQUIRE(tester);
+    const auto before = impl::leak_checked_promise::snapshot();
+    static_cast<void>(coro());
+    REQUIRE(impl::leak_checked_promise::check(before));
 }
 
 
