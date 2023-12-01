@@ -1,5 +1,3 @@
-#include "leak_tester.hpp"
-
 #include <async++/join.hpp>
 #include <async++/stream.hpp>
 
@@ -12,22 +10,22 @@ using namespace asyncpp;
 
 
 TEST_CASE("Stream: destroy", "[Task]") {
-    static const auto coro = [](leak_tester value) -> stream<int> { co_yield 0; };
+    static const auto coro = []() -> stream<int> { co_yield 0; };
 
     SECTION("no execution") {
-        leak_tester tester;
+        const auto before = impl::leak_checked_promise::snapshot();
         {
-            auto s = coro(tester);
+            auto s = coro();
         }
-        REQUIRE(tester);
+        REQUIRE(impl::leak_checked_promise::check(before));
     }
     SECTION("synced") {
-        leak_tester tester;
+        const auto before = impl::leak_checked_promise::snapshot();
         {
-            auto s = coro(tester);
+            auto s = coro();
             join(s);
         }
-        REQUIRE(tester);
+        REQUIRE(impl::leak_checked_promise::check(before));
     }
 }
 

@@ -22,7 +22,7 @@ class task;
 namespace impl_task {
 
     template <class T>
-    struct promise : result_promise<T>, resumable_promise, schedulable_promise {
+    struct promise : result_promise<T>, resumable_promise, schedulable_promise, impl::leak_checked_promise {
         struct final_awaitable {
             constexpr bool await_ready() const noexcept { return false; }
             void await_suspend(std::coroutine_handle<promise> handle) const noexcept {
@@ -42,7 +42,7 @@ namespace impl_task {
         }
 
         constexpr auto initial_suspend() noexcept {
-            m_released.test_and_set();
+            INTERLEAVED(m_released.test_and_set());
             return std::suspend_always{};
         }
 
@@ -66,7 +66,7 @@ namespace impl_task {
         }
 
         void release() noexcept {
-            const auto released = m_released.test_and_set();
+            const auto released = INTERLEAVED(m_released.test_and_set());
             if (released) {
                 handle().destroy();
             }
@@ -85,7 +85,7 @@ namespace impl_task {
         }
 
         void resume() final {
-            [[maybe_unused]] const auto state = m_state.load();
+            [[maybe_unused]] const auto state = INTERLEAVED(m_state.load());
             assert(state != READY);
             return m_scheduler ? m_scheduler->schedule(*this) : handle().resume();
         }
@@ -115,7 +115,7 @@ namespace impl_task {
         }
 
         template <std::convertible_to<const resumable_promise&> Promise>
-        bool await_suspend(std::coroutine_handle<Promise> enclosing) {
+        bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept {
             m_enclosing = &enclosing.promise();
             const bool ready = m_awaited->await(this);
             return !ready;
