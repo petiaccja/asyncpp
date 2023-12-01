@@ -15,7 +15,7 @@ namespace impl_sleep {
     using clock_type = std::chrono::steady_clock;
 
     struct awaitable : basic_awaitable<void> {
-        awaitable(clock_type::time_point time) noexcept;
+        explicit awaitable(clock_type::time_point time) noexcept;
 
         bool await_ready() const noexcept;
         template <std::convertible_to<const resumable_promise&> Promise>
@@ -41,16 +41,16 @@ namespace impl_sleep {
 
 
 template <class Rep, class Period>
-auto sleep_for(std::chrono::duration<Rep, Period> duration) -> impl_sleep::awaitable {
+auto sleep_for(std::chrono::duration<Rep, Period> duration) {
     using impl_sleep::clock_type;
-    return { clock_type::now() + duration };
+    return impl_sleep::awaitable{ clock_type::now() + duration };
 }
 
 
 template <class Clock, class Dur>
-auto sleep_until(std::chrono::time_point<Clock, Dur> time_point) -> impl_sleep::awaitable {
+auto sleep_until(std::chrono::time_point<Clock, Dur> time_point) {
     using impl_sleep::clock_type;
-    return { std::chrono::clock_cast<clock_type>(time_point) };
+    return impl_sleep::awaitable{ std::chrono::clock_cast<clock_type>(time_point) };
 }
 
 } // namespace asyncpp

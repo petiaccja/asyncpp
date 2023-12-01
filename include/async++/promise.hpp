@@ -101,22 +101,22 @@ namespace impl {
 
     public:
 #ifdef ASYNCPP_BUILD_TESTS
-        leak_checked_promise() { num_alive.fetch_add(1, std::memory_order_relaxed); }
-        leak_checked_promise(const leak_checked_promise&) : leak_checked_promise() {}
-        leak_checked_promise(leak_checked_promise&&) : leak_checked_promise() {}
-        leak_checked_promise& operator=(const leak_checked_promise&) { return *this; }
-        leak_checked_promise& operator=(leak_checked_promise&&) { return *this; }
+        leak_checked_promise() noexcept { num_alive.fetch_add(1, std::memory_order_relaxed); }
+        leak_checked_promise(const leak_checked_promise&) noexcept { num_alive.fetch_add(1, std::memory_order_relaxed); }
+        leak_checked_promise(leak_checked_promise&&) noexcept = delete;
+        leak_checked_promise& operator=(const leak_checked_promise&) noexcept { return *this; }
+        leak_checked_promise& operator=(leak_checked_promise&&) noexcept = delete;
         ~leak_checked_promise() {
             num_alive.fetch_sub(1, std::memory_order_relaxed);
             version.fetch_add(1, std::memory_order_relaxed);
         }
 #endif
 
-        static snapshot_type snapshot() {
+        static snapshot_type snapshot() noexcept {
             return { num_alive.load(std::memory_order_relaxed), version.load(std::memory_order_relaxed) };
         }
 
-        static bool check(snapshot_type s) {
+        static bool check(snapshot_type s) noexcept {
             const auto current = snapshot();
             return current.first == s.first && current.second > s.second;
         }
