@@ -21,12 +21,7 @@ namespace impl_sp {
 }
 
 
-#ifdef NDEUBG
-    #define SEQUENCE_POINT(NAME) void()
-    #define SEQUENCE_POINT_ACQUIRE(NAME) void()
-    #define INTERLEAVED(EXPR) EXPR
-    #define INTERLEAVED_ACQUIRE(EXPR) EXPR
-#else
+#if defined(ASYNCPP_BUILD_TESTS) && ASYNCPP_BUILD_TESTS
     #define SEQUENCE_POINT(NAME)                                  \
         {                                                         \
             static ::asyncpp::interleaving::sequence_point sp = { \
@@ -81,6 +76,11 @@ namespace impl_sp {
             ::asyncpp::interleaving::impl_sp::wait(sp);           \
             return EXPR;                                          \
         }(__func__)
+#else
+    #define SEQUENCE_POINT(NAME) void()
+    #define SEQUENCE_POINT_ACQUIRE(NAME) void()
+    #define INTERLEAVED(EXPR) EXPR
+    #define INTERLEAVED_ACQUIRE(EXPR) EXPR
 #endif
 
 } // namespace asyncpp::interleaving
