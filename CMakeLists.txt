@@ -45,3 +45,6 @@ add_subdirectory(src)
 if (${ASYNCPP_BUILD_TESTS})
 	add_subdirectory(test)
 endif()
+
+install(TARGETS async++ DESTINATION "lib")
+install(DIRECTORY "include/async++" DESTINATION "include")
