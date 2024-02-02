@@ -2,7 +2,7 @@
 
 #include "awaitable.hpp"
 #include "container/atomic_collection.hpp"
-#include "interleaving/sequence_point.hpp"
+#include "testing/sequence_point.hpp"
 #include "promise.hpp"
 #include "scheduler.hpp"
 

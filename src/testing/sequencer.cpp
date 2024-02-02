@@ -1,10 +1,10 @@
-#include <asyncpp/interleaving/sequence_point.hpp>
-#include <asyncpp/interleaving/sequencer.hpp>
+#include <asyncpp/testing/sequence_point.hpp>
+#include <asyncpp/testing/sequencer.hpp>
 
 #include <cassert>
 
 
-namespace asyncpp::interleaving {
+namespace asyncpp::testing {
 
 sequencer::sequencer(std::string name) : m_name(name) {}
 

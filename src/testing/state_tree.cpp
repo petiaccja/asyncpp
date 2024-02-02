@@ -1,7 +1,7 @@
-#include <asyncpp/interleaving/state_tree.hpp>
+#include <asyncpp/testing/state_tree.hpp>
 
 
-namespace asyncpp::interleaving {
+namespace asyncpp::testing {
 
 
 state_tree::state_tree(state state)

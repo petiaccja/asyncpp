@@ -2,8 +2,8 @@
 
 #include "helper_schedulers.hpp"
 
-#include <asyncpp/interleaving/runner.hpp>
-#include <asyncpp/interleaving/sequence_point.hpp>
+#include <asyncpp/testing/runner.hpp>
+#include <asyncpp/testing/sequence_point.hpp>
 
 #include <concepts>
 
@@ -45,7 +45,7 @@ auto run_dependent_tasks(MainTask main_task,
     };
 
     return [create_fixture = std::move(create_fixture), sub_thread = std::move(sub_thread), main_thread = std::move(main_thread)] {
-        return interleaving::run_all(std::function(create_fixture),
+        return testing::run_all(std::function(create_fixture),
                                      std::vector{ std::function(main_thread), std::function(sub_thread) },
                                      { "$main", "$sub" });
     };
@@ -74,7 +74,7 @@ auto run_abandoned_task(MainTask main_task,
     };
 
     return [create_fixture = std::move(create_fixture), abandon_thread = std::move(abandon_thread), exec_thread = std::move(exec_thread)] {
-        return interleaving::run_all(std::function(create_fixture),
+        return testing::run_all(std::function(create_fixture),
                                      std::vector{ std::function(abandon_thread), std::function(exec_thread) },
                                      { "$abandon", "$exec" });
     };
@@ -87,7 +87,7 @@ void evaluate_interleavings(InterleavingGenFunc interleaving_gen_func) {
     auto before = impl::leak_checked_promise::snapshot();
     for (const auto& interleaving : interleaving_gen_func()) {
         INFO(count << "\n"
-                   << (interleaving::interleaving_printer{ interleaving, true }));
+                   << (testing::interleaving_printer{ interleaving, true }));
         REQUIRE(impl::leak_checked_promise::check(before));
         auto before = impl::leak_checked_promise::snapshot();
         ++count;
@@ -101,7 +101,7 @@ void evaluate_interleavings(InterleavingGen interleaving_gen) {
     size_t count = 0;
     for (const auto& interleaving : interleaving_gen) {
         INFO(count << "\n"
-                   << (interleaving::interleaving_printer{ interleaving, true }));
+                   << (testing::interleaving_printer{ interleaving, true }));
         ++count;
     }
     REQUIRE(count >= 3);

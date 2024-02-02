@@ -7,7 +7,7 @@
 #include <memory>
 
 
-namespace asyncpp::interleaving {
+namespace asyncpp::testing {
 
 
 struct state {

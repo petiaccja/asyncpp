@@ -1,7 +1,7 @@
 #pragma once
 
 #include "concepts.hpp"
-#include "interleaving/sequence_point.hpp"
+#include "testing/sequence_point.hpp"
 #include "promise.hpp"
 
 #include <coroutine>

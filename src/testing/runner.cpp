@@ -1,7 +1,7 @@
-#include <asyncpp/interleaving/runner.hpp>
-#include <asyncpp/interleaving/sequence_point.hpp>
-#include <asyncpp/interleaving/sequencer.hpp>
-#include <asyncpp/interleaving/state_tree.hpp>
+#include <asyncpp/testing/runner.hpp>
+#include <asyncpp/testing/sequence_point.hpp>
+#include <asyncpp/testing/sequencer.hpp>
+#include <asyncpp/testing/state_tree.hpp>
 
 #include <csignal>
 #include <format>
@@ -11,7 +11,7 @@
 #include <thread>
 
 
-namespace asyncpp::interleaving {
+namespace asyncpp::testing {
 
 
 std::ostream& operator<<(std::ostream& os, const sequence_point& st);

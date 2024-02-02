@@ -5,7 +5,7 @@ target_sources(test
 		container/test_atomic_collection.cpp
 		container/test_atomic_queue.cpp
 		container/test_atomic_stack.cpp
-		interleaving/test_runner.cpp
+		testing/test_runner.cpp
 		main.cpp		
 		test_generator.cpp
 		test_join.cpp

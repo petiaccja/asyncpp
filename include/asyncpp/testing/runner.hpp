@@ -12,7 +12,7 @@
 #include <regex>
 
 
-namespace asyncpp::interleaving {
+namespace asyncpp::testing {
 
 
 struct deadlock_error : std::runtime_error {

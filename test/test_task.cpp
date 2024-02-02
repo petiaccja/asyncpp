@@ -1,6 +1,6 @@
 #include "helper_interleaving.hpp"
 
-#include <asyncpp/interleaving/runner.hpp>
+#include <asyncpp/testing/runner.hpp>
 #include <asyncpp/join.hpp>
 #include <asyncpp/task.hpp>
 

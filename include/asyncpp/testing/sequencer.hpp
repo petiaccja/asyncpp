@@ -6,7 +6,7 @@
 #include <string>
 
 
-namespace asyncpp::interleaving {
+namespace asyncpp::testing {
 
 struct sequence_point;
 

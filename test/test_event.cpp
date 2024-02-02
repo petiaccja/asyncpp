@@ -1,7 +1,7 @@
 #include "helper_interleaving.hpp"
 
 #include <asyncpp/event.hpp>
-#include <asyncpp/interleaving/runner.hpp>
+#include <asyncpp/testing/runner.hpp>
 #include <asyncpp/task.hpp>
 
 #include <functional>
@@ -31,7 +31,7 @@ TEST_CASE("Event: interleave co_await | set", "[Event]") {
         f->evt.set_value(3);
     };
 
-    auto gen = interleaving::run_all(std::function(make_fixture),
+    auto gen = testing::run_all(std::function(make_fixture),
                                      std::vector{ std::function(wait_thread), std::function(set_thread) },
                                      { "$wait", "$set" });
     evaluate_interleavings(std::move(gen));

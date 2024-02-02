@@ -4,7 +4,7 @@
 #include <string_view>
 
 
-namespace asyncpp::interleaving {
+namespace asyncpp::testing {
 
 
 struct sequence_point {
@@ -24,56 +24,56 @@ namespace impl_sp {
 #if defined(ASYNCPP_BUILD_TESTS) && ASYNCPP_BUILD_TESTS
     #define SEQUENCE_POINT(NAME)                                  \
         {                                                         \
-            static ::asyncpp::interleaving::sequence_point sp = { \
+            static ::asyncpp::testing::sequence_point sp = { \
                 false,                                            \
                 NAME,                                             \
                 __func__,                                         \
                 __FILE__,                                         \
                 __LINE__,                                         \
             };                                                    \
-            ::asyncpp::interleaving::impl_sp::wait(sp);           \
+            ::asyncpp::testing::impl_sp::wait(sp);           \
         }                                                         \
         void()
 
 
     #define SEQUENCE_POINT_ACQUIRE(NAME)                          \
         {                                                         \
-            static ::asyncpp::interleaving::sequence_point sp = { \
+            static ::asyncpp::testing::sequence_point sp = { \
                 true,                                             \
                 NAME,                                             \
                 __func__,                                         \
                 __FILE__,                                         \
                 __LINE__,                                         \
             };                                                    \
-            ::asyncpp::interleaving::impl_sp::wait(sp);           \
+            ::asyncpp::testing::impl_sp::wait(sp);           \
         }                                                         \
         void()
 
 
     #define INTERLEAVED(EXPR)                                     \
         [&](std::string_view func) -> decltype(auto) {            \
-            static ::asyncpp::interleaving::sequence_point sp = { \
+            static ::asyncpp::testing::sequence_point sp = { \
                 false,                                            \
                 #EXPR,                                            \
                 func,                                             \
                 __FILE__,                                         \
                 __LINE__,                                         \
             };                                                    \
-            ::asyncpp::interleaving::impl_sp::wait(sp);           \
+            ::asyncpp::testing::impl_sp::wait(sp);           \
             return EXPR;                                          \
         }(__func__)
 
 
     #define INTERLEAVED_ACQUIRE(EXPR)                             \
         [&](std::string_view func) -> decltype(auto) {            \
-            static ::asyncpp::interleaving::sequence_point sp = { \
+            static ::asyncpp::testing::sequence_point sp = { \
                 true,                                             \
                 #EXPR,                                            \
                 func,                                             \
                 __FILE__,                                         \
                 __LINE__,                                         \
             };                                                    \
-            ::asyncpp::interleaving::impl_sp::wait(sp);           \
+            ::asyncpp::testing::impl_sp::wait(sp);           \
             return EXPR;                                          \
         }(__func__)
 #else
