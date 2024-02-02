@@ -1,8 +1,8 @@
 #include "helper_interleaving.hpp"
 
-#include <async++/event.hpp>
-#include <async++/interleaving/runner.hpp>
-#include <async++/task.hpp>
+#include <asyncpp/event.hpp>
+#include <asyncpp/interleaving/runner.hpp>
+#include <asyncpp/task.hpp>
 
 #include <functional>
 

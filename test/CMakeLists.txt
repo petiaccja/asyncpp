@@ -22,4 +22,4 @@ target_sources(test
 
 find_package(Catch2 3 REQUIRED)
 target_link_libraries(test Catch2::Catch2)
-target_link_libraries(test async++)
+target_link_libraries(test asyncpp)

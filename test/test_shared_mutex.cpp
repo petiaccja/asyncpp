@@ -1,7 +1,7 @@
-#include <async++/interleaving/runner.hpp>
-#include <async++/join.hpp>
-#include <async++/shared_mutex.hpp>
-#include <async++/task.hpp>
+#include <asyncpp/interleaving/runner.hpp>
+#include <asyncpp/join.hpp>
+#include <asyncpp/shared_mutex.hpp>
+#include <asyncpp/task.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 

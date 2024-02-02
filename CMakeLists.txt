@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(async++)
+project(asyncpp)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(ASYNCPP_BUILD_TESTS "Build tests." ON)
@@ -40,11 +40,11 @@ if (${ASYNCPP_BUILD_TESTS})
 	add_compile_definitions(ASYNCPP_BUILD_TESTS=1)
 endif()
 
-add_subdirectory(include/async++)
+add_subdirectory(include/asyncpp)
 add_subdirectory(src)
 if (${ASYNCPP_BUILD_TESTS})
 	add_subdirectory(test)
 endif()
 
-install(TARGETS async++ DESTINATION "lib")
-install(DIRECTORY "include/async++" DESTINATION "include")
+install(TARGETS asyncpp DESTINATION "lib")
+install(DIRECTORY "include/asyncpp" DESTINATION "include")
