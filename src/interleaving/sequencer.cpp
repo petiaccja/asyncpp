@@ -1,5 +1,5 @@
-#include <async++/interleaving/sequence_point.hpp>
-#include <async++/interleaving/sequencer.hpp>
+#include <asyncpp/interleaving/sequence_point.hpp>
+#include <asyncpp/interleaving/sequencer.hpp>
 
 #include <cassert>
 

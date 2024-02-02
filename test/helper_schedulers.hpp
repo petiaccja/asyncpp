@@ -1,8 +1,8 @@
 #pragma once
 
-#include <async++/container/atomic_stack.hpp>
-#include <async++/promise.hpp>
-#include <async++/scheduler.hpp>
+#include <asyncpp/container/atomic_stack.hpp>
+#include <asyncpp/promise.hpp>
+#include <asyncpp/scheduler.hpp>
 
 #include <cassert>
 

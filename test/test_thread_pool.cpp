@@ -1,6 +1,6 @@
-#include <async++/join.hpp>
-#include <async++/task.hpp>
-#include <async++/thread_pool.hpp>
+#include <asyncpp/join.hpp>
+#include <asyncpp/task.hpp>
+#include <asyncpp/thread_pool.hpp>
 
 #include <algorithm>
 #include <array>

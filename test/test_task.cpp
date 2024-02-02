@@ -1,8 +1,8 @@
 #include "helper_interleaving.hpp"
 
-#include <async++/interleaving/runner.hpp>
-#include <async++/join.hpp>
-#include <async++/task.hpp>
+#include <asyncpp/interleaving/runner.hpp>
+#include <asyncpp/join.hpp>
+#include <asyncpp/task.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 

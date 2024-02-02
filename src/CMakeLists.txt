@@ -1,6 +1,6 @@
-add_library(async++)
+add_library(asyncpp)
 
-target_sources(async++
+target_sources(asyncpp
 	PRIVATE
 		thread_pool.cpp
 		mutex.cpp
@@ -11,4 +11,4 @@ target_sources(async++
 		interleaving/state_tree.cpp
 )
 
-target_link_libraries(async++ async++-headers)
+target_link_libraries(asyncpp asyncpp-headers)

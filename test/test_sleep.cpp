@@ -1,6 +1,6 @@
-#include <async++/join.hpp>
-#include <async++/sleep.hpp>
-#include <async++/task.hpp>
+#include <asyncpp/join.hpp>
+#include <asyncpp/sleep.hpp>
+#include <asyncpp/task.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
