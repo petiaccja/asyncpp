@@ -1,7 +1,7 @@
 #pragma once
 
 #include "container/atomic_collection.hpp"
-#include "testing/sequence_point.hpp"
+#include "testing/suspension_point.hpp"
 #include "promise.hpp"
 
 #include <cassert>

@@ -3,7 +3,7 @@
 #include "helper_schedulers.hpp"
 
 #include <asyncpp/testing/runner.hpp>
-#include <asyncpp/testing/sequence_point.hpp>
+#include <asyncpp/testing/suspension_point.hpp>
 
 #include <concepts>
 

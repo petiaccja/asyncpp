@@ -1,4 +1,4 @@
-#include <asyncpp/testing/sequence_point.hpp>
+#include <asyncpp/testing/suspension_point.hpp>
 #include <asyncpp/testing/sequencer.hpp>
 
 #include <cassert>
@@ -8,7 +8,7 @@ namespace asyncpp::testing {
 
 sequencer::sequencer(std::string name) : m_name(name) {}
 
-void sequencer::wait(sequence_point& location) {
+void sequencer::wait(suspension_point& location) {
     m_location.store(&location);
     do {
     } while (m_location.load() == &location);

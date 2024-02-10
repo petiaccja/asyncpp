@@ -37,7 +37,7 @@ public:
     filter() : filter(".*") {}
     explicit filter(std::string_view file_regex) : m_files(file_regex.begin(), file_regex.end()) {}
 
-    bool operator()(const sequence_point& point) const;
+    bool operator()(const suspension_point& point) const;
 
 private:
     std::regex m_files;

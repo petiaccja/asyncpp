@@ -1,5 +1,5 @@
 #include <asyncpp/testing/runner.hpp>
-#include <asyncpp/testing/sequence_point.hpp>
+#include <asyncpp/testing/suspension_point.hpp>
 #include <asyncpp/testing/sequencer.hpp>
 #include <asyncpp/testing/state_tree.hpp>
 
@@ -14,7 +14,7 @@
 namespace asyncpp::testing {
 
 
-std::ostream& operator<<(std::ostream& os, const sequence_point& st);
+std::ostream& operator<<(std::ostream& os, const suspension_point& st);
 std::ostream& operator<<(std::ostream& os, const sequencer::state& st);
 
 namespace impl_sp {
@@ -25,8 +25,8 @@ namespace impl_sp {
     };
 
 
-    sequence_point initial_point{ .acquire = false, .name = "<start>", .file = __FILE__, .line = __LINE__ };
-    sequence_point final_point{ .acquire = false, .name = "<finish>", .file = __FILE__, .line = __LINE__ };
+    suspension_point initial_point{ .acquire = false, .name = "<start>", .file = __FILE__, .line = __LINE__ };
+    suspension_point final_point{ .acquire = false, .name = "<finish>", .file = __FILE__, .line = __LINE__ };
     thread_local std::shared_ptr<sequencer> local_sequencer;
     thread_local filter local_filter;
 
@@ -55,7 +55,7 @@ namespace impl_sp {
     }
 
 
-    void wait(sequence_point& sp) {
+    void wait(suspension_point& sp) {
         if (local_sequencer) {
             if (local_filter(sp)) {
                 local_sequencer->wait(sp);
@@ -247,7 +247,7 @@ generator<interleaving> run_all(std::function<std::any()> fixture, std::vector<s
 }
 
 
-std::ostream& operator<<(std::ostream& os, const sequence_point& st) {
+std::ostream& operator<<(std::ostream& os, const suspension_point& st) {
     os << st.function << "\n";
     os << "    " << st.name;
     if (st.acquire) {
@@ -295,7 +295,7 @@ std::ostream& operator<<(std::ostream& os, const interleaving_printer& il) {
 }
 
 
-bool filter::operator()(const sequence_point& point) const {
+bool filter::operator()(const suspension_point& point) const {
     return std::regex_search(point.file.begin(), point.file.end(), m_files);
 }
 

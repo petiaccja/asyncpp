@@ -8,7 +8,7 @@
 
 namespace asyncpp::testing {
 
-struct sequence_point;
+struct suspension_point;
 
 
 class sequencer {
@@ -20,21 +20,21 @@ public:
             running,
             acquiring,
         } activity;
-        sequence_point* location = nullptr;
+        suspension_point* location = nullptr;
     };
 
-    static inline sequence_point* const RUNNING = reinterpret_cast<sequence_point*>(std::numeric_limits<size_t>::max() - 2);
-    static inline sequence_point* const ACQUIRING = reinterpret_cast<sequence_point*>(std::numeric_limits<size_t>::max() - 1);
+    static inline suspension_point* const RUNNING = reinterpret_cast<suspension_point*>(std::numeric_limits<size_t>::max() - 2);
+    static inline suspension_point* const ACQUIRING = reinterpret_cast<suspension_point*>(std::numeric_limits<size_t>::max() - 1);
 
     sequencer(std::string name = {});
 
     auto get_name() const -> std::string_view;
     auto get_state() const -> state;
-    void wait(sequence_point& location);
+    void wait(suspension_point& location);
     bool allow();
 
 private:
-    std::atomic<sequence_point*> m_location = RUNNING;
+    std::atomic<suspension_point*> m_location = RUNNING;
     std::string m_name;
 };
 

@@ -17,6 +17,7 @@ target_sources(test
 		test_thread_pool.cpp
 		test_event.cpp
 		test_sleep.cpp
+		testing/test_interleaver.cpp
 )
 
 

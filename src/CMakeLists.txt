@@ -9,6 +9,7 @@ target_sources(asyncpp
 		testing/runner.cpp
 		testing/sequencer.cpp
 		testing/state_tree.cpp
+		testing/interleaver.cpp
 )
 
 target_link_libraries(asyncpp asyncpp-headers)
