@@ -1,5 +1,7 @@
 #include <asyncpp/testing/interleaver.hpp>
 
+#include <ranges>
+
 #include <catch2/catch_test_macros.hpp>
 
 
@@ -11,224 +13,183 @@ static suspension_point p2;
 static suspension_point p3;
 
 
-TEST_CASE("Interleaver - select resumed") {
-    const interleaving_graph::vertex start_state({
-        thread_state::suspended(p1),
-        thread_state::suspended(p1),
-    });
-
-    const interleaving_graph::vertex on_0_state({
-        thread_state::suspended(p2),
-        thread_state::suspended(p1),
-    });
-
-    const interleaving_graph::vertex on_1_state({
-        thread_state::suspended(p1),
-        thread_state::suspended(p2),
-    });
-
-    const interleaving_graph::vertex blocked_state({
-        thread_state::blocked,
-        thread_state::suspended(p1),
-        thread_state::blocked,
-        thread_state::blocked,
-    });
-
-    const interleaving_graph::vertex completed_state({
-        thread_state::completed,
-        thread_state::completed,
-        thread_state::suspended(p1),
-        thread_state::completed,
-    });
-
-    const interleaving_graph::vertex final_state({
-        thread_state::completed,
-        thread_state::completed,
-    });
-
-    SECTION("unconstrained") {
-        interleaving_graph_state graph;
-        graph.graph.add_vertex(start_state);
-        REQUIRE(0 == select_resumed(graph, start_state));
+// Number of combinations.
+template <std::integral T>
+T ncr(T n, T k) {
+    T result = 1;
+    for (auto factor = n; factor >= n - k + 1; --factor) {
+        result *= factor;
     }
-    SECTION("completion constrained") {
-        interleaving_graph_state graph;
-        graph.graph.add_vertex(start_state);
-        graph.graph.add_vertex(on_0_state);
-        graph.graph.add_vertex(on_1_state);
-        graph.graph.add_edge(start_state, on_0_state);
-        graph.graph.add_edge(start_state, on_1_state);
-        graph.transition_map[{ start_state, on_0_state }] = 0;
-        graph.transition_map[{ start_state, on_1_state }] = 1;
+    for (auto divisor = k; divisor >= 1; --divisor) {
+        result /= divisor;
+    }
+    return result;
+}
 
-        SECTION("0th incomplete") {
-            graph.completion_map[on_0_state] = false;
-            graph.completion_map[on_1_state] = true;
-            REQUIRE(0 == select_resumed(graph, start_state));
-        }
 
-        SECTION("1th incomplete") {
-            graph.completion_map[on_0_state] = true;
-            graph.completion_map[on_1_state] = false;
-            REQUIRE(1 == select_resumed(graph, start_state));
-        }
+TEST_CASE("Helper - nCr helper code", "[Helper]") {
+    REQUIRE(ncr(1, 1) == 1);
+    REQUIRE(ncr(4, 1) == 4);
+    REQUIRE(ncr(4, 2) == 6);
+}
 
-        SECTION("both complete") {
-            graph.completion_map[on_0_state] = true;
-            graph.completion_map[on_1_state] = true;
-            REQUIRE(0 == select_resumed(graph, start_state));
-        }
+
+TEST_CASE("Interleaver - next from stable node", "[Interleaver]") {
+    const std::vector initial = { thread_state::suspended(p1) };
+
+    SECTION("first time: add new state") {
+        tree t;
+        auto& transition = t.next(t.root(), swarm_state(initial));
+
+        REQUIRE(t.root().swarm_states.size() == 1);
+        REQUIRE(t.root().swarm_states.begin()->first == swarm_state(initial));
+        REQUIRE(&t.previous(transition) == &t.root());
+    }
+    SECTION("subsequent times: fetch state") {
+        tree t;
+        auto& transition_1 = t.next(t.root(), swarm_state(initial));
+        auto& transition_2 = t.next(t.root(), swarm_state(initial));
+        REQUIRE(t.root().swarm_states.size() == 1);
+        REQUIRE(&transition_1 == &transition_2);
+    }
+}
+
+
+TEST_CASE("Interleaver - next from transition node", "[Interleaver]") {
+    const std::vector initial = { thread_state::suspended(p1) };
+
+    SECTION("first time: add new transition") {
+        tree t;
+        auto& transition = t.next(t.root(), swarm_state(initial));
+        auto& next = t.next(transition, 0);
+
+        REQUIRE(next.swarm_states.empty());
+        REQUIRE(&t.previous(next) == &transition);
+        REQUIRE(transition.completed.empty());
+        REQUIRE(transition.successors.contains(0));
+        REQUIRE(transition.successors.find(0)->second.get() == &next);
+    }
+    SECTION("subsequent times: fetch transition") {
+        tree t;
+        auto& transition = t.next(t.root(), swarm_state(initial));
+        auto& next_1 = t.next(transition, 0);
+        auto& next_2 = t.next(transition, 0);
+
+        REQUIRE(transition.successors.contains(0));
+        REQUIRE(transition.successors.find(0)->second.get() == &next_1);
+        REQUIRE(transition.successors.find(0)->second.get() == &next_2);
+    }
+}
+
+
+TEST_CASE("Interleaver - is transitively complete", "[Interleaver]") {
+    const std::vector initial = { thread_state::suspended(p1) };
+    const std::vector final = { thread_state::completed };
+    const std::vector blocked = { thread_state::blocked };
+
+    SECTION("empty root node") {
+        tree t;
+        REQUIRE(is_transitively_complete(t, t.root()));
+    }
+    SECTION("complete node") {
+        tree t;
+        auto& transition = t.next(t.root(), swarm_state(final));
+        REQUIRE(is_transitively_complete(t, t.root()));
+    }
+    SECTION("complete transition") {
+        tree t;
+        auto& transition = t.next(t.root(), swarm_state(initial));
+        transition.completed.insert(0);
+        REQUIRE(is_transitively_complete(t, t.root()));
+    }
+    SECTION("incomplete transition & incomplete node") {
+        tree t;
+        auto& transition = t.next(t.root(), swarm_state(initial));
+        REQUIRE(!is_transitively_complete(t, t.root()));
     }
     SECTION("blocked") {
-        interleaving_graph_state graph;
-        graph.graph.add_vertex(blocked_state);
-        REQUIRE(1 == select_resumed(graph, blocked_state));
-    }
-    SECTION("completed") {
-        interleaving_graph_state graph;
-        graph.graph.add_vertex(completed_state);
-        REQUIRE(2 == select_resumed(graph, completed_state));
-    }
-    SECTION("final") {
-        interleaving_graph_state graph;
-        graph.graph.add_vertex(final_state);
-        REQUIRE_THROWS(select_resumed(graph, final_state));
+        tree t;
+        auto& transition = t.next(t.root(), swarm_state(blocked));
+        REQUIRE(!is_transitively_complete(t, t.root()));
     }
 }
 
 
-TEST_CASE("Interleaver - mark completed tree dense") {
-    const interleaving_graph::vertex start_state({
-        thread_state::suspended(p1),
-        thread_state::suspended(p1),
-    });
+TEST_CASE("Interleaver - mark complete", "[Interleaver]") {
+    const std::vector at_p1 = { thread_state::suspended(p1) };
+    const std::vector at_p2 = { thread_state::suspended(p2) };
+    const std::vector final = { thread_state::completed };
 
-    const interleaving_graph::vertex left_state({
-        thread_state::suspended(p2),
-        thread_state::suspended(p1),
-    });
+    tree t;
+    auto& n1 = t.root();
+    auto& t1 = t.next(n1, swarm_state(at_p1));
+    auto& n2 = t.next(t1, 0);
+    auto& t2 = t.next(t.root(), swarm_state(at_p2));
+    auto& n3 = t.next(t2, 0);
 
-    const interleaving_graph::vertex right_state({
-        thread_state::suspended(p1),
-        thread_state::suspended(p2),
-    });
+    mark_complete(t, n3);
 
-    interleaving_graph_state graph;
-    graph.graph.add_vertex(start_state);
-    graph.graph.add_vertex(left_state);
-    graph.graph.add_vertex(right_state);
-    graph.graph.add_edge(start_state, left_state);
-    graph.graph.add_edge(start_state, right_state);
-    graph.completion_map[start_state] = false;
-    graph.completion_map[left_state] = false;
-    graph.completion_map[right_state] = false;
-
-    SECTION("mark left") {
-        mark_completed(graph, left_state);
-        REQUIRE(graph.completion_map[start_state] == false);
-        REQUIRE(graph.completion_map[left_state] == true);
-        REQUIRE(graph.completion_map[right_state] == false);
-    }
-    SECTION("mark right") {
-        mark_completed(graph, right_state);
-        REQUIRE(graph.completion_map[start_state] == false);
-        REQUIRE(graph.completion_map[left_state] == false);
-        REQUIRE(graph.completion_map[right_state] == true);
-    }
-    SECTION("mark both") {
-        mark_completed(graph, left_state);
-        mark_completed(graph, right_state);
-        REQUIRE(graph.completion_map[start_state] == true);
-        REQUIRE(graph.completion_map[left_state] == true);
-        REQUIRE(graph.completion_map[right_state] == true);
-    }
+    REQUIRE(is_transitively_complete(t, n1));
 }
 
 
-TEST_CASE("Interleaver - mark completed tree sparse") {
-    const interleaving_graph::vertex start_state({
-        thread_state::suspended(p1),
-        thread_state::suspended(p1),
-    });
+TEST_CASE("Interleaver - select resumed", "[Interleaver]") {
+    const std::vector initial = { thread_state::suspended(p3), thread_state::suspended(p3) };
+    const std::vector both_ready = { thread_state::suspended(p1), thread_state::suspended(p1) };
+    const std::vector left_ready = { thread_state::suspended(p1), thread_state::completed };
+    const std::vector right_ready = { thread_state::completed, thread_state::suspended(p1) };
+    const std::vector none_ready = { thread_state::completed, thread_state::completed };
+    const std::vector left_blocked = { thread_state::blocked, thread_state::suspended(p1) };
+    const std::vector right_blocked = { thread_state::suspended(p1), thread_state::blocked };
 
-    const interleaving_graph::vertex left_state({
-        thread_state::suspended(p2),
-        thread_state::suspended(p1),
-    });
+    tree t;
+    auto& transition = t.next(t.root(), swarm_state(initial));
 
-    interleaving_graph_state graph;
-    graph.graph.add_vertex(start_state);
-    graph.graph.add_vertex(left_state);
-    graph.graph.add_edge(start_state, left_state);
-    graph.completion_map[start_state] = false;
-    graph.completion_map[left_state] = false;
-
-    mark_completed(graph, left_state);
-    REQUIRE(graph.completion_map[start_state] == false);
-    REQUIRE(graph.completion_map[left_state] == true);
-}
-
-
-TEST_CASE("Interleaver - mark completed tree leaf") {
-    const interleaving_graph::vertex start_state({
-        thread_state::completed,
-        thread_state::suspended(p1),
-    });
-
-    const interleaving_graph::vertex left_state({
-        thread_state::completed,
-        thread_state::completed,
-    });
-
-    interleaving_graph_state graph;
-    graph.graph.add_vertex(start_state);
-    graph.graph.add_vertex(left_state);
-    graph.graph.add_edge(start_state, left_state);
-    graph.completion_map[start_state] = false;
-    graph.completion_map[left_state] = false;
-
-    mark_completed(graph, left_state);
-    REQUIRE(graph.completion_map[start_state] == true);
-    REQUIRE(graph.completion_map[left_state] == true);
-}
-
-
-TEST_CASE("Interleaver - mark completed circle") {
-    const interleaving_graph::vertex state_0({
-        thread_state::suspended(p1),
-    });
-
-    const interleaving_graph::vertex state_r({
-        thread_state::suspended(p3),
-    });
-
-    const interleaving_graph::vertex state_1({
-        thread_state::suspended(p2),
-    });
-
-    const interleaving_graph::vertex state_2({
-        thread_state::completed,
-    });
-
-    interleaving_graph_state graph;
-    graph.graph.add_vertex(state_0);
-    graph.graph.add_vertex(state_r);
-    graph.graph.add_vertex(state_1);
-    graph.graph.add_vertex(state_2);
-    graph.graph.add_edge(state_0, state_1);
-    graph.graph.add_edge(state_1, state_r);
-    graph.graph.add_edge(state_r, state_0);
-    graph.graph.add_edge(state_1, state_2);
-    graph.completion_map[state_0] = false;
-    graph.completion_map[state_r] = false;
-    graph.completion_map[state_1] = false;
-    graph.completion_map[state_2] = false;
-
-    mark_completed(graph, state_2);
-    REQUIRE(graph.completion_map[state_0] == true);
-    REQUIRE(graph.completion_map[state_r] == true);
-    REQUIRE(graph.completion_map[state_1] == true);
-    REQUIRE(graph.completion_map[state_2] == true);
+    SECTION("both ready - none visited") {
+        REQUIRE(0 == select_resumed(swarm_state(both_ready), transition));
+    }
+    SECTION("both ready - left visited") {
+        t.next(transition, 0);
+        REQUIRE(1 == select_resumed(swarm_state(both_ready), transition));
+    }
+    SECTION("both ready - right visited") {
+        t.next(transition, 1);
+        REQUIRE(0 == select_resumed(swarm_state(both_ready), transition));
+    }
+    SECTION("both ready - left completed") {
+        t.next(transition, 0);
+        t.next(transition, 1);
+        transition.completed.insert(0);
+        REQUIRE(1 == select_resumed(swarm_state(both_ready), transition));
+    }
+    SECTION("both ready - right completed") {
+        t.next(transition, 0);
+        t.next(transition, 1);
+        transition.completed.insert(1);
+        REQUIRE(0 == select_resumed(swarm_state(both_ready), transition));
+    }
+    SECTION("both ready - both completed") {
+        t.next(transition, 0);
+        t.next(transition, 1);
+        transition.completed.insert(0);
+        transition.completed.insert(1);
+        REQUIRE(0 == select_resumed(swarm_state(both_ready), transition));
+    }
+    SECTION("left ready") {
+        REQUIRE(0 == select_resumed(swarm_state(left_ready), transition));
+    }
+    SECTION("right ready") {
+        REQUIRE(1 == select_resumed(swarm_state(right_ready), transition));
+    }
+    SECTION("left blocked") {
+        REQUIRE(1 == select_resumed(swarm_state(left_blocked), transition));
+    }
+    SECTION("right blocked") {
+        REQUIRE(0 == select_resumed(swarm_state(right_blocked), transition));
+    }
+    SECTION("none ready") {
+        REQUIRE_THROWS(select_resumed(swarm_state(none_ready), transition));
+    }
 }
 
 
@@ -272,18 +233,18 @@ TEST_CASE("Interleaver - single thread combinatorics", "[Interleaver]") {
 TEST_CASE("Interleaver - two thread combinatorics", "[Interleaver]") {
     struct Scenario : CollectorScenario {
         static void thread_0(Scenario&) {
-            hit(0);
+            hit(10);
             INTERLEAVED("A0");
-            hit(1);
+            hit(11);
             INTERLEAVED("A1");
-            hit(2);
+            hit(12);
         }
         static void thread_1(Scenario&) {
-            hit(3);
+            hit(20);
             INTERLEAVED("B0");
-            hit(4);
+            hit(21);
             INTERLEAVED("B1");
-            hit(5);
+            hit(22);
         }
     };
 
@@ -292,22 +253,48 @@ TEST_CASE("Interleaver - two thread combinatorics", "[Interleaver]") {
         Scenario,
         INTERLEAVED_THREAD("thread_0", &Scenario::thread_0),
         INTERLEAVED_THREAD("thread_1", &Scenario::thread_1));
-    std::vector<std::vector<int>> expected = {
-        {0,  1, 2, 3, 4, 5},
-        { 0, 1, 3, 2, 4, 5},
-        { 0, 1, 3, 4, 2, 5},
-        { 0, 1, 3, 4, 5, 2},
-        { 0, 3, 1, 2, 4, 5},
-        { 0, 3, 1, 4, 2, 5},
-        { 0, 3, 1, 4, 5, 2},
-        { 0, 3, 4, 1, 2, 5},
-        { 0, 3, 4, 1, 5, 2},
-        { 0, 3, 4, 5, 1, 2},
-        { 3, 0, 4, 5, 1, 2},
-        { 3, 4, 0, 5, 1, 2},
-        { 3, 4, 5, 0, 1, 2},
+
+    // Get and sort(!) all executed interleavings.
+    auto interleaveings = std::move(Scenario::interleavings);
+    std::ranges::sort(interleaveings);
+
+    // Check no interleaving was run twice.
+    REQUIRE(std::ranges::unique(interleaveings).end() == interleaveings.end());
+
+    // Check we have all the interleavings.
+    REQUIRE(interleaveings.size() == ncr(6, 3));
+}
+
+
+TEST_CASE("Interleaver - three thread combinatorics", "[Interleaver]") {
+    struct Scenario : CollectorScenario {
+        static void thread_0(Scenario&) {
+            hit(10);
+            INTERLEAVED("A0");
+            hit(11);
+        }
+        static void thread_1(Scenario&) {
+            hit(20);
+            INTERLEAVED("B0");
+            hit(21);
+        }
+        static void thread_2(Scenario&) {
+            hit(30);
+            INTERLEAVED("C0");
+            hit(31);
+        }
     };
-    std::ranges::sort(expected);
-    std::ranges::sort(Scenario::interleavings);
-    REQUIRE(Scenario::interleavings == expected);
+
+    Scenario::reset();
+    INTERLEAVED_TEST(
+        Scenario,
+        INTERLEAVED_THREAD("thread_0", &Scenario::thread_0),
+        INTERLEAVED_THREAD("thread_1", &Scenario::thread_1),
+        INTERLEAVED_THREAD("thread_2", &Scenario::thread_2));
+
+    auto interleaveings = std::move(Scenario::interleavings);
+    std::ranges::sort(interleaveings);
+
+    REQUIRE(std::ranges::unique(interleaveings).end() == interleaveings.end());
+    REQUIRE(interleaveings.size() == ncr(4, 2) * ncr(6, 4));
 }

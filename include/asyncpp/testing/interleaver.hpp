@@ -2,12 +2,15 @@
 
 #include "suspension_point.hpp"
 
+#include <asyncpp/generator.hpp>
+
 #include <algorithm>
 #include <atomic>
 #include <cassert>
-#include <iostream>
 #include <functional>
+#include <iostream>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
@@ -61,10 +64,10 @@ public:
 
     template <class Func, class... Args>
     thread(Func func, Args&&... args) {
-        const auto wrapper = [ this, func ]<Args... args>(Args && ... args) {
+        const auto wrapper = [this, func]<Args... args>(Args&&... args_) {
             initialize_this_thread();
             INTERLEAVED("initial_point");
-            func(std::forward<Args>(args)...);
+            func(std::forward<Args>(args_)...);
             m_content->state = thread_state::completed;
         };
         m_content->thread = std::jthread(wrapper, std::forward<Args>(args)...);
@@ -95,60 +98,77 @@ struct thread_function {
 };
 
 
-class interleaving_graph {
-public:
-    struct vertex {
-        std::vector<thread_state> state;
-        auto operator<=>(const vertex&) const = default;
-    };
+template <std::convertible_to<std::string> Str, class Scenario>
+thread_function(const Str&, void (*)(Scenario&)) -> thread_function<Scenario>;
 
-    struct neighbor_list {
-        std::vector<vertex> in_edges;
-        std::vector<vertex> out_edges;
-    };
 
-public:
-    bool contains(const vertex& v) {
-        return m_vertices.contains(v);
-    }
+struct swarm_state {
+    std::vector<thread_state> thread_states;
 
-    std::span<const vertex> in_edges(const vertex& v) const {
-        const auto it = m_vertices.find(v);
-        assert(it != m_vertices.end());
-        return it->second.in_edges;
-    }
-
-    std::span<const vertex> out_edges(const vertex& v) const {
-        const auto it = m_vertices.find(v);
-        assert(it != m_vertices.end());
-        return it->second.out_edges;
-    }
-
-    void add_vertex(vertex v) {
-        m_vertices.insert_or_assign(std::move(v), neighbor_list{});
-    }
-
-    void add_edge(const vertex& source, const vertex& target) {
-        const auto source_it = m_vertices.find(source);
-        const auto target_it = m_vertices.find(target);
-        assert(source_it != m_vertices.end());
-        source_it->second.out_edges.push_back(target);
-        target_it->second.in_edges.push_back(source);
-    }
-
-    std::string dump(std::function<bool(const vertex&)> completion = {}, std::function<size_t(const vertex&, const vertex&)> transition = {}) const;
-
-private:
-    std::map<vertex, neighbor_list> m_vertices;
+    auto operator<=>(const swarm_state&) const = default;
 };
 
 
-struct interleaving_graph_state {
-    interleaving_graph graph;
-    std::map<interleaving_graph::vertex, bool> completion_map;
-    std::map<std::pair<interleaving_graph::vertex, interleaving_graph::vertex>, size_t> transition_map;
+class tree {
+public:
+    struct transition_node;
 
-    std::string dump() const;
+    struct stable_node : std::enable_shared_from_this<stable_node> {
+        stable_node() = default;
+        stable_node(std::map<swarm_state, std::shared_ptr<transition_node>> swarm_states,
+                    std::weak_ptr<transition_node> predecessor)
+            : swarm_states(std::move(swarm_states)), predecessor(std::move(predecessor)) {}
+        std::map<swarm_state, std::shared_ptr<transition_node>> swarm_states;
+        std::weak_ptr<transition_node> predecessor;
+    };
+
+    struct transition_node : std::enable_shared_from_this<transition_node> {
+        transition_node() = default;
+        transition_node(std::map<int, std::shared_ptr<stable_node>> successors,
+                        std::weak_ptr<stable_node> predecessor)
+            : successors(std::move(successors)), predecessor(std::move(predecessor)) {}
+        std::map<int, std::shared_ptr<stable_node>> successors;
+        std::set<int> completed;
+        std::weak_ptr<stable_node> predecessor;
+    };
+
+public:
+    stable_node& root() {
+        return *m_root;
+    }
+
+    transition_node& next(stable_node& node, const swarm_state& state) {
+        const auto it = node.swarm_states.find(state);
+        if (it != node.swarm_states.end()) {
+            return *it->second;
+        }
+        const auto successor = std::make_shared<transition_node>(std::map<int, std::shared_ptr<stable_node>>{}, node.weak_from_this());
+        return *node.swarm_states.insert_or_assign(state, successor).first->second;
+    }
+
+    stable_node& next(transition_node& node, int resumed) {
+        const auto it = node.successors.find(resumed);
+        if (it != node.successors.end()) {
+            return *it->second;
+        }
+        const auto successor = std::make_shared<stable_node>(std::map<swarm_state, std::shared_ptr<transition_node>>{}, node.weak_from_this());
+        return *node.successors.insert_or_assign(resumed, successor).first->second;
+    }
+
+    transition_node& previous(stable_node& node) {
+        const auto ptr = node.predecessor.lock();
+        assert(ptr);
+        return *ptr;
+    }
+
+    stable_node& previous(transition_node& node) {
+        const auto ptr = node.predecessor.lock();
+        assert(ptr);
+        return *ptr;
+    }
+
+private:
+    std::shared_ptr<stable_node> m_root = std::make_shared<stable_node>();
 };
 
 
@@ -162,14 +182,14 @@ std::vector<std::unique_ptr<thread>> launch_threads(const std::vector<thread_fun
     return threads;
 }
 
-
-interleaving_graph::vertex stabilize(std::span<std::unique_ptr<thread>> threads);
-bool interleave(interleaving_graph_state& graph, std::span<std::unique_ptr<thread>> threads);
+std::vector<thread_state> stabilize(std::span<std::unique_ptr<thread>> threads);
 std::vector<thread_state> get_states(std::span<std::unique_ptr<thread>> threads);
-size_t select_resumed(interleaving_graph_state& graph, const interleaving_graph::vertex& v);
-bool is_stable(const interleaving_graph::vertex& v);
-bool is_completed(const interleaving_graph::vertex& v);
-void mark_completed(interleaving_graph_state& graph, const interleaving_graph::vertex& v);
+bool is_stable(const std::vector<thread_state>& v);
+bool is_unblocked(const std::vector<thread_state>& states);
+int select_resumed(const swarm_state& state, const tree::transition_node& node);
+bool is_transitively_complete(const tree& tree, const tree::stable_node& node);
+void mark_complete(tree& tree, tree::stable_node& node);
+void run_next_interleaving(tree& tree, std::span<std::unique_ptr<thread>> swarm);
 
 
 template <class Scenario>
@@ -179,13 +199,12 @@ public:
         : m_thread_funcs(std::move(thread_funcs)) {}
 
     void run() {
-        interleaving_graph_state graph;
-        bool completed;
+        tree tree;
+        int max = 100;
         do {
-            auto threads = launch_threads(m_thread_funcs);
-            completed = interleave(graph, threads);
-        } while (!completed);
-        std::cout << graph.dump() << std::endl;
+            auto swarm = launch_threads(m_thread_funcs);
+            run_next_interleaving(tree, swarm);
+        } while (!is_transitively_complete(tree, tree.root()) && max-- > 0);
     }
 
 private:
