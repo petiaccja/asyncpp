@@ -1,4 +1,3 @@
-#include <asyncpp/testing/runner.hpp>
 #include <asyncpp/join.hpp>
 #include <asyncpp/shared_mutex.hpp>
 #include <asyncpp/task.hpp>

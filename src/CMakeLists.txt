@@ -6,9 +6,6 @@ target_sources(asyncpp
 		mutex.cpp
 		shared_mutex.cpp
 		sleep.cpp
-		testing/runner.cpp
-		testing/sequencer.cpp
-		testing/state_tree.cpp
 		testing/interleaver.cpp
 )
 

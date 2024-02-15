@@ -1,8 +1,8 @@
 #include "helper_interleaving.hpp"
 
-#include <asyncpp/testing/runner.hpp>
 #include <asyncpp/join.hpp>
 #include <asyncpp/shared_task.hpp>
+#include <asyncpp/testing/interleaver.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -11,24 +11,18 @@ using namespace asyncpp;
 
 
 TEST_CASE("Shared task: interleaving co_await", "[Shared task]") {
-    static const auto sub_task = []() -> shared_task<int> {
-        co_return 3;
-    };
-    static const auto main_task = [](shared_task<int> tsk) -> shared_task<int> {
-        tsk.launch();
-        co_return co_await tsk;
-    };
-
-    auto interleavings = run_dependent_tasks(main_task, sub_task, std::tuple{}, std::tuple{});
-    evaluate_interleavings(std::move(interleavings));
+    INTERLEAVED_RUN(
+        await_task_scenario<shared_task>,
+        THREAD("awaited", &await_task_scenario<shared_task>::awaited),
+        THREAD("awaiter", &await_task_scenario<shared_task>::awaiter));
 }
 
 
 TEST_CASE("Shared task: interleaving abandon", "[Shared task]") {
-    static const auto abandoned_task = []() -> shared_task<int> { co_return 3; };
-
-    auto interleavings = run_abandoned_task(abandoned_task, std::tuple{});
-    evaluate_interleavings(std::move(interleavings));
+    INTERLEAVED_RUN(
+        abandon_task_scenario<shared_task>,
+        THREAD("task", &abandon_task_scenario<shared_task>::task),
+        THREAD("abandon", &abandon_task_scenario<shared_task>::abandon));
 }
 
 

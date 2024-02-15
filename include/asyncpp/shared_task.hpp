@@ -196,7 +196,7 @@ public:
     }
 
 private:
-    promise_type* m_promise;
+    promise_type* m_promise = nullptr;
 };
 
 

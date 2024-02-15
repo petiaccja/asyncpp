@@ -1,8 +1,8 @@
 #include "helper_interleaving.hpp"
 
 #include <asyncpp/event.hpp>
-#include <asyncpp/testing/runner.hpp>
 #include <asyncpp/task.hpp>
+#include <asyncpp/testing/interleaver.hpp>
 
 #include <functional>
 
@@ -12,27 +12,26 @@ using namespace asyncpp;
 
 
 TEST_CASE("Event: interleave co_await | set", "[Event]") {
-    struct fixture {
+    struct scenario {
+        thread_locked_scheduler sched;
         event<int> evt;
+
+        scenario() {
+            const auto func = [this]() -> task<int> {
+                co_return co_await evt;
+            };
+
+            launch(func(), sched);
+        }
+
+        void wait() {
+            sched.resume();
+        }
+
+        void set() {
+            evt.set_value(0);
+        }
     };
 
-    auto make_fixture = [] {
-        return std::make_shared<fixture>();
-    };
-
-    auto wait_thread = [](std::shared_ptr<fixture> f) {
-        const auto coro = [f]() -> task<int> {
-            co_return co_await f->evt;
-        };
-        auto t = coro();
-        t.launch();
-    };
-    auto set_thread = [](std::shared_ptr<fixture> f) {
-        f->evt.set_value(3);
-    };
-
-    auto gen = testing::run_all(std::function(make_fixture),
-                                     std::vector{ std::function(wait_thread), std::function(set_thread) },
-                                     { "$wait", "$set" });
-    evaluate_interleavings(std::move(gen));
+    INTERLEAVED_RUN(scenario, THREAD("wait", &scenario::wait), THREAD("set", &scenario::set));
 }

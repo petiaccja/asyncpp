@@ -212,7 +212,7 @@ struct CollectorScenario {
 
 TEST_CASE("Interleaver - single thread combinatorics", "[Interleaver]") {
     struct Scenario : CollectorScenario {
-        static void thread_0(Scenario&) {
+        void thread_0() {
             INTERLEAVED(hit(0));
             INTERLEAVED(hit(1));
             INTERLEAVED(hit(2));
@@ -220,9 +220,9 @@ TEST_CASE("Interleaver - single thread combinatorics", "[Interleaver]") {
     };
 
     Scenario::reset();
-    INTERLEAVED_TEST(
+    INTERLEAVED_RUN(
         Scenario,
-        INTERLEAVED_THREAD("thread_0", &Scenario::thread_0));
+        THREAD("thread_0", &Scenario::thread_0));
     const std::vector<std::vector<int>> expected = {
         {0, 1, 2}
     };
@@ -232,14 +232,14 @@ TEST_CASE("Interleaver - single thread combinatorics", "[Interleaver]") {
 
 TEST_CASE("Interleaver - two thread combinatorics", "[Interleaver]") {
     struct Scenario : CollectorScenario {
-        static void thread_0(Scenario&) {
+        void thread_0() {
             hit(10);
             INTERLEAVED("A0");
             hit(11);
             INTERLEAVED("A1");
             hit(12);
         }
-        static void thread_1(Scenario&) {
+        void thread_1() {
             hit(20);
             INTERLEAVED("B0");
             hit(21);
@@ -249,10 +249,10 @@ TEST_CASE("Interleaver - two thread combinatorics", "[Interleaver]") {
     };
 
     Scenario::reset();
-    INTERLEAVED_TEST(
+    INTERLEAVED_RUN(
         Scenario,
-        INTERLEAVED_THREAD("thread_0", &Scenario::thread_0),
-        INTERLEAVED_THREAD("thread_1", &Scenario::thread_1));
+        THREAD("thread_0", &Scenario::thread_0),
+        THREAD("thread_1", &Scenario::thread_1));
 
     // Get and sort(!) all executed interleavings.
     auto interleaveings = std::move(Scenario::interleavings);
@@ -268,17 +268,17 @@ TEST_CASE("Interleaver - two thread combinatorics", "[Interleaver]") {
 
 TEST_CASE("Interleaver - three thread combinatorics", "[Interleaver]") {
     struct Scenario : CollectorScenario {
-        static void thread_0(Scenario&) {
+        void thread_0() {
             hit(10);
             INTERLEAVED("A0");
             hit(11);
         }
-        static void thread_1(Scenario&) {
+        void thread_1() {
             hit(20);
             INTERLEAVED("B0");
             hit(21);
         }
-        static void thread_2(Scenario&) {
+        void thread_2() {
             hit(30);
             INTERLEAVED("C0");
             hit(31);
@@ -286,15 +286,46 @@ TEST_CASE("Interleaver - three thread combinatorics", "[Interleaver]") {
     };
 
     Scenario::reset();
-    INTERLEAVED_TEST(
+    INTERLEAVED_RUN(
         Scenario,
-        INTERLEAVED_THREAD("thread_0", &Scenario::thread_0),
-        INTERLEAVED_THREAD("thread_1", &Scenario::thread_1),
-        INTERLEAVED_THREAD("thread_2", &Scenario::thread_2));
+        THREAD("thread_0", &Scenario::thread_0),
+        THREAD("thread_1", &Scenario::thread_1),
+        THREAD("thread_2", &Scenario::thread_2));
 
     auto interleaveings = std::move(Scenario::interleavings);
     std::ranges::sort(interleaveings);
 
     REQUIRE(std::ranges::unique(interleaveings).end() == interleaveings.end());
     REQUIRE(interleaveings.size() == ncr(4, 2) * ncr(6, 4));
+}
+
+
+TEST_CASE("Interleaver - acquire", "[Interleaver]") {
+    struct Scenario : CollectorScenario {
+        std::atomic_flag f;
+
+        void thread_0() {
+            INTERLEAVED_ACQUIRE("A0");
+            while (!f.test()) {
+            }
+            INTERLEAVED("A1");
+            hit(10);
+        }
+        void thread_1() {
+            INTERLEAVED("B0");
+            hit(20);
+            f.test_and_set();
+        }
+    };
+
+    Scenario::reset();
+    INTERLEAVED_RUN(
+        Scenario,
+        THREAD("thread_0", &Scenario::thread_0),
+        THREAD("thread_1", &Scenario::thread_1));
+
+    auto interleaveings = std::move(Scenario::interleavings);
+    std::ranges::sort(interleaveings);
+    REQUIRE(interleaveings.size() >= 1);
+    REQUIRE(interleaveings[0] == std::vector{ 20, 10 });
 }

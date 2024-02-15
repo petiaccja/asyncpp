@@ -1,6 +1,7 @@
 #include <asyncpp/testing/interleaver.hpp>
 
 #include <algorithm>
+#include <format>
 #include <numeric>
 #include <ranges>
 #include <regex>
@@ -31,9 +32,7 @@ namespace impl_suspension {
 void thread::resume() {
     const auto current_state = m_content->state.load();
     const auto current_suspension_point = current_state.get_suspension_point();
-    if (!current_suspension_point) {
-        throw std::logic_error("thread must be suspended at a suspension point");
-    }
+    assert(current_suspension_point && "thread must be suspended at a suspension point");
     const auto next_state = current_suspension_point->acquire ? thread_state::blocked : thread_state::running;
     m_content->state.store(next_state);
 }
@@ -52,10 +51,118 @@ thread_state thread::get_state() const {
 
 
 void thread::suspend(const suspension_point& sp) {
-    m_content->state.store(thread_state::suspended(sp));
+    const auto prev_state = m_content->state.exchange(thread_state::suspended(sp));
+    assert(prev_state == thread_state::running || prev_state == thread_state::blocked);
     while (m_content->state.load().is_suspended()) {
         // Wait.
     }
+}
+
+
+tree::stable_node& tree::root() {
+    return *m_root;
+}
+
+
+tree::transition_node& tree::next(stable_node& node, const swarm_state& state) {
+    const auto it = node.swarm_states.find(state);
+    if (it != node.swarm_states.end()) {
+        return *it->second;
+    }
+    const auto successor = std::make_shared<transition_node>(std::map<int, std::shared_ptr<stable_node>>{}, node.weak_from_this());
+    return *node.swarm_states.insert_or_assign(state, successor).first->second;
+}
+
+
+tree::stable_node& tree::next(transition_node& node, int resumed) {
+    const auto it = node.successors.find(resumed);
+    if (it != node.successors.end()) {
+        return *it->second;
+    }
+    const auto successor = std::make_shared<stable_node>(std::map<swarm_state, std::shared_ptr<transition_node>>{}, node.weak_from_this());
+    return *node.successors.insert_or_assign(resumed, successor).first->second;
+}
+
+
+tree::transition_node& tree::previous(stable_node& node) {
+    const auto ptr = node.predecessor.lock();
+    assert(ptr);
+    return *ptr;
+}
+
+
+tree::stable_node& tree::previous(transition_node& node) {
+    const auto ptr = node.predecessor.lock();
+    assert(ptr);
+    return *ptr;
+}
+
+
+std::string dump(const swarm_state& state) {
+    std::stringstream ss;
+    for (const auto& th : state.thread_states) {
+        if (th == thread_state::completed) {
+            ss << "completed";
+        }
+        else if (th == thread_state::blocked) {
+            ss << "blocked";
+        }
+        else if (th == thread_state::running) {
+            ss << "running";
+        }
+        else {
+            ss << th.get_suspension_point()->function << "::" << th.get_suspension_point()->name;
+        }
+        ss << "\n";
+    }
+    return ss.str();
+}
+
+
+std::string tree::dump() const {
+    std::stringstream ss;
+
+    std::stack<const stable_node*> worklist;
+    worklist.push(m_root.get());
+
+    ss << "digraph G {\n";
+
+    while (!worklist.empty()) {
+        const auto node = worklist.top();
+        worklist.pop();
+
+        size_t state_idx = 0;
+        for (const auto& [swarm, transition] : node->swarm_states) {
+            const auto node_name = std::format("_{}_{}", (void*)node, state_idx++);
+            const auto transition_name = std::format("_{}", (void*)transition.get());
+
+            auto state = asyncpp::testing::dump(swarm);
+            state = std::regex_replace(state, std::regex("\n"), "\\n");
+            state = std::regex_replace(state, std::regex("\""), "\\\"");
+            ss << std::format("{} [label=\"{}\"];\n", node_name, state);
+            ss << node_name << " -> " << transition_name << ";\n";
+
+            std::stringstream complete;
+            for (const auto v : transition->completed) {
+                complete << v << " ";
+            }
+            ss << std::format("{} [label=\"complete: [{}]\"];\n", transition_name, complete.str());
+
+            if (const auto predecessor = node->predecessor.lock()) {
+                const auto resumed = std::ranges::find_if(predecessor->successors, [&](const auto& s) { return s.second.get() == node; })->first;
+                const auto predecessor_name = std::format("_{}", (void*)predecessor.get());
+                ss << predecessor_name << " -> " << node_name << " [label=" << resumed << "];\n";
+            }
+
+            for (const auto& [resumed, next] : transition->successors) {
+                worklist.emplace(next.get());
+            }
+        }
+    }
+
+    ss << "}";
+
+    return ss.str();
 }
 
 
@@ -135,7 +242,7 @@ bool is_transitively_complete(const tree& tree, const tree::stable_node& node) {
         completed_paths.resize(swarm.thread_states.size(), false);
         for (size_t resumed = 0; resumed < swarm.thread_states.size(); ++resumed) {
             const auto& ts = swarm.thread_states[resumed];
-            if (ts == thread_state::completed) {
+            if (ts == thread_state::completed || ts == thread_state::blocked) {
                 completed_paths[resumed] = true;
             }
         }

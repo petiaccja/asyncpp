@@ -25,9 +25,9 @@ namespace asyncpp::testing {
 struct thread_state {
 private:
     enum class code : size_t {
-        running = ~size_t(0) - 1,
-        blocked = ~size_t(0) - 2,
-        completed = ~size_t(0) - 3,
+        running = size_t(-1),
+        blocked = size_t(-2),
+        completed = size_t(-3),
     };
 
 public:
@@ -68,7 +68,7 @@ public:
             initialize_this_thread();
             INTERLEAVED("initial_point");
             func(std::forward<Args>(args_)...);
-            m_content->state = thread_state::completed;
+            m_content->state.store(thread_state::completed);
         };
         m_content->thread = std::jthread(wrapper, std::forward<Args>(args)...);
     }
@@ -94,12 +94,12 @@ private:
 template <class Scenario>
 struct thread_function {
     std::string name;
-    void (*func)(Scenario&);
+    void (Scenario::*func)();
 };
 
 
 template <std::convertible_to<std::string> Str, class Scenario>
-thread_function(const Str&, void (*)(Scenario&)) -> thread_function<Scenario>;
+thread_function(const Str&, void (Scenario::*)()) -> thread_function<Scenario>;
 
 
 struct swarm_state {
@@ -133,39 +133,12 @@ public:
     };
 
 public:
-    stable_node& root() {
-        return *m_root;
-    }
-
-    transition_node& next(stable_node& node, const swarm_state& state) {
-        const auto it = node.swarm_states.find(state);
-        if (it != node.swarm_states.end()) {
-            return *it->second;
-        }
-        const auto successor = std::make_shared<transition_node>(std::map<int, std::shared_ptr<stable_node>>{}, node.weak_from_this());
-        return *node.swarm_states.insert_or_assign(state, successor).first->second;
-    }
-
-    stable_node& next(transition_node& node, int resumed) {
-        const auto it = node.successors.find(resumed);
-        if (it != node.successors.end()) {
-            return *it->second;
-        }
-        const auto successor = std::make_shared<stable_node>(std::map<swarm_state, std::shared_ptr<transition_node>>{}, node.weak_from_this());
-        return *node.successors.insert_or_assign(resumed, successor).first->second;
-    }
-
-    transition_node& previous(stable_node& node) {
-        const auto ptr = node.predecessor.lock();
-        assert(ptr);
-        return *ptr;
-    }
-
-    stable_node& previous(transition_node& node) {
-        const auto ptr = node.predecessor.lock();
-        assert(ptr);
-        return *ptr;
-    }
+    stable_node& root();
+    transition_node& next(stable_node& node, const swarm_state& state);
+    stable_node& next(transition_node& node, int resumed);
+    transition_node& previous(stable_node& node);
+    stable_node& previous(transition_node& node);
+    std::string dump() const;
 
 private:
     std::shared_ptr<stable_node> m_root = std::make_shared<stable_node>();
@@ -177,7 +150,7 @@ std::vector<std::unique_ptr<thread>> launch_threads(const std::vector<thread_fun
     const auto scenario = std::make_shared<Scenario>();
     std::vector<std::unique_ptr<thread>> threads;
     for (const auto& thread_func : thread_funcs) {
-        threads.push_back(std::make_unique<thread>([scenario, func = thread_func.func] { func(*scenario); }));
+        threads.push_back(std::make_unique<thread>([scenario, func = thread_func.func] { (scenario.get()->*func)(); }));
     }
     return threads;
 }
@@ -200,11 +173,11 @@ public:
 
     void run() {
         tree tree;
-        int max = 100;
         do {
             auto swarm = launch_threads(m_thread_funcs);
             run_next_interleaving(tree, swarm);
-        } while (!is_transitively_complete(tree, tree.root()) && max-- > 0);
+            std::cout << tree.dump() << std::endl;
+        } while (!is_transitively_complete(tree, tree.root()));
     }
 
 private:
@@ -215,8 +188,8 @@ private:
 } // namespace asyncpp::testing
 
 
-#define INTERLEAVED_TEST(SCENARIO, ...) \
+#define INTERLEAVED_RUN(SCENARIO, ...) \
     asyncpp::testing::interleaver<SCENARIO>({ __VA_ARGS__ }).run()
 
-#define INTERLEAVED_THREAD(NAME, METHOD) \
+#define THREAD(NAME, METHOD) \
     asyncpp::testing::thread_function(NAME, METHOD)
