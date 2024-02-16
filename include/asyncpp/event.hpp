@@ -3,7 +3,6 @@
 #include "container/atomic_collection.hpp"
 #include "container/atomic_item.hpp"
 #include "promise.hpp"
-#include "testing/suspension_point.hpp"
 
 #include <cassert>
 #include <stdexcept>
@@ -13,6 +12,7 @@ namespace asyncpp {
 
 template <class T>
 class basic_event {
+public:
     struct awaitable {
         basic_event* m_owner = nullptr;
         resumable_promise* m_enclosing = nullptr;
@@ -51,11 +51,19 @@ public:
     }
 
     void set_exception(std::exception_ptr ex) {
+        set(task_result<T>(std::move(ex)));
+    }
+
+    void set(task_result<T> result) {
         if (m_result.has_value()) {
             throw std::invalid_argument("event already set");
         }
-        m_result = std::move(ex);
+        m_result = std::move(result);
         resume_one();
+    }
+
+    bool ready() const noexcept {
+        return m_awaiter.closed();
     }
 
     awaitable operator co_await() {
@@ -69,6 +77,7 @@ public:
 protected:
     void resume_one() {
         auto item = m_awaiter.close();
+        assert(!m_awaiter.closed(item));
         if (item != nullptr) {
             assert(item->m_enclosing != nullptr);
             item->m_enclosing->resume();
@@ -85,11 +94,7 @@ template <class T>
 class event : public basic_event<T> {
 public:
     void set_value(T value) {
-        if (this->m_result.has_value()) {
-            throw std::invalid_argument("event already set");
-        }
-        this->m_result = std::forward<T>(value);
-        this->resume_one();
+        this->set(task_result<T>(std::forward<T>(value)));
     }
 };
 
@@ -98,17 +103,14 @@ template <>
 class event<void> : public basic_event<void> {
 public:
     void set_value() {
-        if (this->m_result.has_value()) {
-            throw std::invalid_argument("event already set");
-        }
-        this->m_result = nullptr;
-        this->resume_one();
+        set(task_result<void>(nullptr));
     }
 };
 
 
 template <class T>
 class basic_broadcast_event {
+public:
     struct awaitable {
         basic_broadcast_event* m_owner = nullptr;
         resumable_promise* m_enclosing = nullptr;
@@ -143,11 +145,19 @@ public:
     }
 
     void set_exception(std::exception_ptr ex) {
+        set(task_result<T>(std::move(ex)));
+    }
+
+    void set(task_result<T> result) {
         if (m_result.has_value()) {
             throw std::invalid_argument("event already set");
         }
-        m_result = std::move(ex);
+        m_result = std::move(result);
         resume_all();
+    }
+
+    bool ready() const noexcept {
+        return m_awaiters.closed();
     }
 
     awaitable operator co_await() {
@@ -178,11 +188,7 @@ template <class T>
 class broadcast_event : public basic_broadcast_event<T> {
 public:
     void set_value(T value) {
-        if (this->m_result.has_value()) {
-            throw std::invalid_argument("event already set");
-        }
-        this->m_result = std::forward<T>(value);
-        this->resume_all();
+        this->set(task_result<T>(std::forward<T>(value)));
     }
 };
 
@@ -191,11 +197,7 @@ template <>
 class broadcast_event<void> : public basic_broadcast_event<void> {
 public:
     void set_value() {
-        if (this->m_result.has_value()) {
-            throw std::invalid_argument("event already set");
-        }
-        this->m_result = nullptr;
-        this->resume_all();
+        set(task_result<void>(nullptr));
     }
 };
 

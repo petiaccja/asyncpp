@@ -12,7 +12,9 @@ public:
     atomic_item() noexcept = default;
 
     Element* set(Element* element) noexcept {
-        return m_item.exchange(element);
+        Element* expected = nullptr;
+        m_item.compare_exchange_strong(expected, element);
+        return expected;
     }
 
     Element* close() noexcept {

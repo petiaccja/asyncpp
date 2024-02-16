@@ -9,7 +9,7 @@
 namespace asyncpp {
 
 class rc_from_this {
-    template <std::derived_from<rc_from_this> T, class Deleter>
+    template <class T, class Deleter>
     friend class rc_ptr;
 
     std::atomic_size_t m_rc = 0;
@@ -17,7 +17,6 @@ class rc_from_this {
 
 
 template <class T>
-    requires requires(T* object) { object->destroy(); }
 struct rc_default_delete {
     void operator()(T* object) const {
         object->destroy();
@@ -25,13 +24,13 @@ struct rc_default_delete {
 };
 
 
-template <std::derived_from<rc_from_this> T, class Deleter = rc_default_delete<T>>
+template <class T, class Deleter = rc_default_delete<T>>
 class rc_ptr {
 public:
     rc_ptr() noexcept(std::is_nothrow_constructible_v<Deleter>)
         : m_ptr(nullptr) {}
 
-    rc_ptr(T* ptr, Deleter deleter = {}) noexcept(std::is_nothrow_move_constructible_v<Deleter>)
+    explicit rc_ptr(T* ptr, Deleter deleter = {}) noexcept(std::is_nothrow_move_constructible_v<Deleter>)
         : m_ptr(ptr),
           m_deleter(std::move(deleter)) {
         increment();
@@ -67,6 +66,12 @@ public:
         decrement();
     }
 
+    void reset(T* ptr = nullptr) {
+        decrement();
+        m_ptr = ptr;
+        increment();
+    }
+
     T* get() const noexcept {
         return m_ptr;
     }
@@ -77,6 +82,7 @@ public:
     }
 
     T* operator->() const noexcept {
+        assert(m_ptr);
         return m_ptr;
     }
 
@@ -120,7 +126,7 @@ private:
     }
 
 private:
-    T* m_ptr;
+    T* m_ptr = nullptr;
     Deleter m_deleter;
 };
 
