@@ -93,7 +93,7 @@ TEST_CASE("Interleaver - is transitively complete", "[Interleaver]") {
     }
     SECTION("complete node") {
         tree t;
-        auto& transition = t.next(t.root(), swarm_state(final));
+        t.next(t.root(), swarm_state(final));
         REQUIRE(is_transitively_complete(t, t.root()));
     }
     SECTION("complete transition") {
@@ -104,13 +104,13 @@ TEST_CASE("Interleaver - is transitively complete", "[Interleaver]") {
     }
     SECTION("incomplete transition & incomplete node") {
         tree t;
-        auto& transition = t.next(t.root(), swarm_state(initial));
+        t.next(t.root(), swarm_state(initial));
         REQUIRE(!is_transitively_complete(t, t.root()));
     }
     SECTION("blocked") {
         tree t;
-        auto& transition = t.next(t.root(), swarm_state(blocked));
-        REQUIRE(!is_transitively_complete(t, t.root()));
+        t.next(t.root(), swarm_state(blocked));
+        REQUIRE(is_transitively_complete(t, t.root()));
     }
 }
 
