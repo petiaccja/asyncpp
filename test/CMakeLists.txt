@@ -5,6 +5,7 @@ target_sources(test
 		container/test_atomic_collection.cpp
 		container/test_atomic_queue.cpp
 		container/test_atomic_stack.cpp
+		memory/test_rc_ptr.cpp
 		main.cpp		
 		test_generator.cpp
 		test_join.cpp
