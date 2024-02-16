@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <atomic>
 #include <limits>
 
@@ -10,7 +9,7 @@ namespace asyncpp {
 template <class Element, Element* Element::*next>
 class atomic_collection {
 public:
-    atomic_collection() = default;
+    atomic_collection() noexcept = default;
 
     Element* push(Element* element) noexcept {
         Element* first = nullptr;
@@ -29,27 +28,21 @@ public:
     }
 
     bool empty() const noexcept {
-        return m_first.load(std::memory_order_relaxed) == nullptr || closed();
+        const auto item = m_first.load(std::memory_order_relaxed);
+        return item == nullptr || closed(item);
     }
 
     bool closed() const noexcept {
-        return m_first.load(std::memory_order_relaxed) == CLOSED;
+        return closed(m_first.load(std::memory_order_relaxed));
     }
 
     static bool closed(Element* element) {
         return element == CLOSED;
     }
 
-    Element* first() {
+    Element* first() const noexcept {
         return m_first.load(std::memory_order_relaxed);
     }
-
-    const Element* first() const {
-        return m_first.load(std::memory_order_relaxed);
-    }
-
-protected:
-    atomic_collection(Element* first) : m_first(first) {}
 
 private:
     std::atomic<Element*> m_first = nullptr;

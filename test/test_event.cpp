@@ -5,29 +5,30 @@
 #include <asyncpp/task.hpp>
 #include <asyncpp/testing/interleaver.hpp>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 using namespace asyncpp;
 
 
-TEST_CASE("Event: set value", "[Event]") {
-    broadcast_event<int> evt;
+TEMPLATE_TEST_CASE("Event: set value", "[Event]", event<int>, broadcast_event<int>) {
+    TestType evt;
     REQUIRE(evt._debug_get_result().has_value() == false);
     evt.set_value(1);
     REQUIRE(evt._debug_get_result().get_or_throw() == 1);
 }
 
 
-TEST_CASE("Event: set error", "[Event]") {
-    broadcast_event<int> evt;
+TEMPLATE_TEST_CASE("Event: set error", "[Event]", event<int>, broadcast_event<int>) {
+    TestType evt;
     REQUIRE(evt._debug_get_result().has_value() == false);
     evt.set_exception(std::make_exception_ptr(std::runtime_error("test")));
     REQUIRE_THROWS_AS(evt._debug_get_result().get_or_throw(), std::runtime_error);
 }
 
 
-TEST_CASE("Event: set twice", "[Event]") {
-    broadcast_event<int> evt;
+TEMPLATE_TEST_CASE("Event: set twice", "[Event]", event<int>, broadcast_event<int>) {
+    TestType evt;
     REQUIRE(evt._debug_get_result().has_value() == false);
     evt.set_value(1);
     REQUIRE_THROWS(evt.set_value(1));
@@ -41,8 +42,8 @@ monitor_task monitor_coro(Event& evt) {
 }
 
 
-TEST_CASE("Event: await before set", "[Event]") {
-    broadcast_event<int> evt;
+TEMPLATE_TEST_CASE("Event: await before set", "[Event]", event<int>, broadcast_event<int>) {
+    TestType evt;
 
     SECTION("value") {
         auto monitor = monitor_coro(evt);
@@ -63,8 +64,8 @@ TEST_CASE("Event: await before set", "[Event]") {
 }
 
 
-TEST_CASE("Event: await after set", "[Event]") {
-    broadcast_event<int> evt;
+TEMPLATE_TEST_CASE("Event: await after set", "[Event]", event<int>, broadcast_event<int>) {
+    TestType evt;
 
     SECTION("value") {
         evt.set_value(1);
@@ -79,11 +80,85 @@ TEST_CASE("Event: await after set", "[Event]") {
         REQUIRE(monitor.get_counters().suspensions == 0);
         REQUIRE(monitor.get_counters().done == true);
         REQUIRE(monitor.get_counters().exception != nullptr);
+    }
+}
+
+
+TEST_CASE("Event: types", "[Event]") {
+    SECTION("value") {
+        event<int> evt;
+        evt.set_value(1);
+        [&]() -> monitor_task {
+            const auto result = co_await evt;
+            REQUIRE(result == 1);
+        }();
+    }
+    SECTION("reference") {
+        event<int&> evt;
+        int value = 1;
+        evt.set_value(value);
+        [&]() -> monitor_task {
+            const auto& result = co_await evt;
+            REQUIRE(&result == &value);
+        }();
+    }
+    SECTION("void") {
+        event<void> evt;
+        evt.set_value();
+        [&]() -> monitor_task {
+            co_await evt;
+        }();
+    }
+}
+
+
+TEST_CASE("Event: broadcast types", "[Event]") {
+    SECTION("value") {
+        broadcast_event<int> evt;
+        evt.set_value(1);
+        [&]() -> monitor_task {
+            const auto result = co_await evt;
+            REQUIRE(result == 1);
+        }();
+    }
+    SECTION("reference") {
+        broadcast_event<int&> evt;
+        int value = 1;
+        evt.set_value(value);
+        [&]() -> monitor_task {
+            const auto& result = co_await evt;
+            REQUIRE(&result == &value);
+        }();
+    }
+    SECTION("void") {
+        broadcast_event<void> evt;
+        evt.set_value();
+        [&]() -> monitor_task {
+            co_await evt;
+        }();
     }
 }
 
 
 TEST_CASE("Event: multiple awaiters", "[Event]") {
+    event<int> evt;
+
+    auto mon1 = monitor_coro(evt);
+    auto mon2 = monitor_coro(evt);
+    evt.set_value(1);
+
+    REQUIRE(mon1.get_counters().suspensions == 1);
+    REQUIRE(mon2.get_counters().suspensions == 0);
+
+    REQUIRE(mon1.get_counters().done == true);
+    REQUIRE(mon2.get_counters().done == true);
+
+    REQUIRE(mon1.get_counters().exception == nullptr);
+    REQUIRE(mon2.get_counters().exception != nullptr);
+}
+
+
+TEST_CASE("Event: broadcast multiple awaiters", "[Event]") {
     broadcast_event<int> evt;
 
     auto mon1 = monitor_coro(evt);

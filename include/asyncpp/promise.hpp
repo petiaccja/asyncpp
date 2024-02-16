@@ -51,6 +51,14 @@ struct task_result {
         }
         return static_cast<reference>(std::get<value_type>(value));
     }
+
+    value_type move_or_throw() {
+        auto& value = m_result.value(); // Throws if empty.
+        if (std::holds_alternative<std::exception_ptr>(value)) {
+            std::rethrow_exception(std::get<std::exception_ptr>(value));
+        }
+        return std::move(std::get<value_type>(value));
+    }
 };
 
 
