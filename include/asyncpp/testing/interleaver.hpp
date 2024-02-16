@@ -64,7 +64,7 @@ public:
 
     template <class Func, class... Args>
     thread(Func func, Args&&... args) {
-        const auto wrapper = [this, func]<Args... args>(Args&&... args_) {
+        const auto wrapper = [this, func = std::move(func)]<Args... args>(Args&&... args_) {
             initialize_this_thread();
             INTERLEAVED("initial_point");
             func(std::forward<Args>(args_)...);
@@ -176,7 +176,6 @@ public:
         do {
             auto swarm = launch_threads(m_thread_funcs);
             run_next_interleaving(tree, swarm);
-            std::cout << tree.dump() << std::endl;
         } while (!is_transitively_complete(tree, tree.root()));
     }
 

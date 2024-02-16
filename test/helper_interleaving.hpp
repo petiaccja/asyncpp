@@ -37,6 +37,7 @@ struct await_task_scenario {
             awaiter_sched.resume();
         }
         REQUIRE(1 == join(result));
+        result = {};
     }
 
     void awaited() {
@@ -60,6 +61,7 @@ struct abandon_task_scenario {
 
     void task() {
         sched.resume();
+        result = {};
     }
 
     void abandon() {
