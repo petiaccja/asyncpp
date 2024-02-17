@@ -1,10 +1,10 @@
 #pragma once
 
-#include "awaitable.hpp"
-#include "container/atomic_collection.hpp"
-#include "testing/suspension_point.hpp"
+#include "event.hpp"
+#include "memory/rc_ptr.hpp"
 #include "promise.hpp"
 #include "scheduler.hpp"
+#include "testing/suspension_point.hpp"
 
 #include <cassert>
 #include <utility>
@@ -20,63 +20,23 @@ class shared_task;
 namespace impl_shared_task {
 
     template <class T>
-    struct chained_awaitable : basic_awaitable<T> {
-        chained_awaitable* m_next;
-    };
-
-    template <class T>
-    struct promise : result_promise<T>, resumable_promise, schedulable_promise, impl::leak_checked_promise {
+    struct promise : result_promise<T>, resumable_promise, schedulable_promise, impl::leak_checked_promise, rc_from_this {
         struct final_awaitable {
             constexpr bool await_ready() const noexcept { return false; }
             void await_suspend(std::coroutine_handle<promise> handle) noexcept {
                 auto& owner = handle.promise();
-
-                auto awaiting = INTERLEAVED(owner.m_awaiting.close());
-                while (awaiting != nullptr) {
-                    awaiting->on_ready();
-                    awaiting = awaiting->m_next;
-                }
-
-                owner.release();
+                owner.m_event.set(owner.m_result);
+                owner.m_self.reset();
             }
             constexpr void await_resume() const noexcept {}
         };
 
         auto get_return_object() {
-            return shared_task<T>(this);
+            return shared_task<T>(rc_ptr(this));
         }
 
         auto initial_suspend() noexcept {
             return std::suspend_always{};
-        }
-
-        void start() noexcept {
-            const bool has_started = INTERLEAVED(m_started.test_and_set());
-            if (!has_started) {
-                acquire();
-                resume();
-            }
-        }
-
-        bool await(chained_awaitable<T>* awaiter) {
-            start();
-            const auto previous = INTERLEAVED(m_awaiting.push(awaiter));
-            return m_awaiting.closed(previous);
-        }
-
-        void acquire() {
-            INTERLEAVED(m_references.fetch_add(1, std::memory_order_release));
-        }
-
-        void release() {
-            const auto references = INTERLEAVED(m_references.fetch_sub(1, std::memory_order_acquire));
-            if (references == 1) {
-                handle().destroy();
-            }
-        }
-
-        auto& get_result() noexcept {
-            return this->m_result;
         }
 
         auto final_suspend() noexcept {
@@ -91,43 +51,49 @@ namespace impl_shared_task {
             return m_scheduler ? m_scheduler->schedule(*this) : handle().resume();
         }
 
+        void start() noexcept {
+            if (!INTERLEAVED(m_started.test_and_set(std::memory_order_relaxed))) {
+                m_self.reset(this);
+                resume();
+            }
+        }
+
+        static auto await(rc_ptr<promise> pr);
+
         bool ready() const {
-            return INTERLEAVED(m_awaiting.closed());
+            return m_event.ready();
+        }
+
+        void destroy() {
+            handle().destroy();
         }
 
     private:
-        std::atomic_size_t m_references = 0;
         std::atomic_flag m_started;
-        atomic_collection<chained_awaitable<T>, &chained_awaitable<T>::m_next> m_awaiting;
+        broadcast_event<T> m_event;
+        rc_ptr<promise> m_self;
     };
 
 
     template <class T>
-    struct awaitable : chained_awaitable<T> {
-        promise<T>* m_awaited = nullptr;
-        resumable_promise* m_enclosing = nullptr;
+    struct awaitable : broadcast_event<T>::awaitable {
+        using base = typename broadcast_event<T>::awaitable;
 
-        awaitable(promise<T>* awaited) : m_awaited(awaited) {}
+        rc_ptr<promise<T>> m_awaited = nullptr;
 
-        constexpr bool await_ready() const noexcept {
-            return m_awaited->ready();
-        }
-
-        template <std::convertible_to<const resumable_promise&> Promise>
-        bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept {
-            m_enclosing = &enclosing.promise();
-            const bool ready = m_awaited->await(this);
-            return !ready;
-        }
-
-        auto await_resume() -> typename task_result<T>::reference {
-            return m_awaited->get_result().get_or_throw();
-        }
-
-        void on_ready() noexcept final {
-            m_enclosing->resume();
+        awaitable(base base, rc_ptr<promise<T>> awaited) : base(std::move(base)), m_awaited(awaited) {
+            assert(m_awaited);
         }
     };
+
+
+    template <class T>
+    auto promise<T>::await(rc_ptr<promise> pr) {
+        assert(pr);
+        pr->start();
+        auto base = pr->m_event.operator co_await();
+        return awaitable<T>{ std::move(base), std::move(pr) };
+    }
 
 } // namespace impl_shared_task
 
@@ -138,40 +104,15 @@ public:
     using promise_type = impl_shared_task::promise<T>;
 
     shared_task() = default;
-
-    shared_task(const shared_task& rhs) noexcept : shared_task(rhs.m_promise) {}
-
-    shared_task& operator=(const shared_task& rhs) noexcept {
-        if (m_promise) {
-            m_promise->release();
-        }
-        m_promise = rhs.m_promise;
-        m_promise->acquire();
-        return *this;
-    }
-
-    shared_task(shared_task&& rhs) noexcept : m_promise(std::exchange(rhs.m_promise, nullptr)) {}
-
-    shared_task& operator=(shared_task&& rhs) noexcept {
-        if (m_promise) {
-            m_promise->release();
-        }
-        m_promise = std::exchange(rhs.m_promise, nullptr);
-        return *this;
-    }
-
-    shared_task(promise_type* promise) : m_promise(promise) {
-        m_promise->acquire();
-    }
-
-    ~shared_task() {
-        if (m_promise) {
-            m_promise->release();
-        }
-    }
+    shared_task(rc_ptr<promise_type> promise) : m_promise(std::move(promise)) {}
 
     bool valid() const {
-        return m_promise != nullptr;
+        return !!m_promise;
+    }
+
+    bool ready() const {
+        assert(valid());
+        return m_promise->ready();
     }
 
     void launch() {
@@ -179,24 +120,20 @@ public:
         m_promise->start();
     }
 
-    bool ready() {
-        assert(valid());
-        return m_promise->ready();
-    }
-
-    auto operator co_await() const {
-        assert(valid());
-        return impl_shared_task::awaitable<T>(m_promise);
-    }
-
     void bind(scheduler& scheduler) {
+        assert(valid());
         if (m_promise) {
             m_promise->m_scheduler = &scheduler;
         }
     }
 
+    auto operator co_await() {
+        assert(valid());
+        return promise_type::await(m_promise);
+    }
+
 private:
-    promise_type* m_promise = nullptr;
+    rc_ptr<promise_type> m_promise;
 };
 
 
