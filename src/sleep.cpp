@@ -55,7 +55,7 @@ namespace impl_sleep {
                     if (next->get_time() <= clock_type::now()) {
                         m_queue.pop();
                         lk.unlock();
-                        next->on_ready();
+                        next->m_enclosing->resume();
                     }
                 }
             }
@@ -81,10 +81,6 @@ namespace impl_sleep {
 
     void awaitable::await_resume() const noexcept {
         return;
-    }
-
-    void awaitable::on_ready() noexcept {
-        m_enclosing->resume();
     }
 
     void awaitable::enqueue() noexcept {
