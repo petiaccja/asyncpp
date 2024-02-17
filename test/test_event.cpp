@@ -182,3 +182,27 @@ TEST_CASE("Event: broadcast multiple awaiters", "[Event]") {
     REQUIRE(mon3.get_counters().exception == nullptr);
     REQUIRE(mon4.get_counters().exception == nullptr);
 }
+
+
+TEMPLATE_TEST_CASE("Event: await-set interleave", "[Event]", event<int>, broadcast_event<int>) {
+    struct scenario {
+        TestType evt;
+        int result = 0;
+
+        void thread_1() {
+            evt.set_value(1);
+        }
+
+        void thread_2() {
+            [](scenario& s) -> monitor_task {
+                s.result = co_await s.evt;
+            }(*this);
+        }
+
+        void validate() {
+            REQUIRE(result == 1);
+        }
+    };
+
+    INTERLEAVED_RUN(scenario, THREAD("t1", &scenario::thread_1), THREAD("t2", &scenario::thread_2));
+}

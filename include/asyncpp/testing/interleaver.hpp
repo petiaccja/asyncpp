@@ -64,7 +64,7 @@ public:
 
     template <class Func, class... Args>
     thread(Func func, Args&&... args) {
-        const auto wrapper = [this, func = std::move(func)]<Args... args>(Args&&... args_) {
+        const auto wrapper = [ this, func = std::move(func) ]<Args... args>(Args && ... args_) {
             initialize_this_thread();
             INTERLEAVED("initial_point");
             func(std::forward<Args>(args_)...);
@@ -146,13 +146,14 @@ private:
 
 
 template <class Scenario>
-std::vector<std::unique_ptr<thread>> launch_threads(const std::vector<thread_function<Scenario>>& thread_funcs) {
+auto launch_threads(const std::vector<thread_function<Scenario>>& thread_funcs)
+    -> std::pair<std::vector<std::unique_ptr<thread>>, std::shared_ptr<Scenario>> {
     const auto scenario = std::make_shared<Scenario>();
     std::vector<std::unique_ptr<thread>> threads;
     for (const auto& thread_func : thread_funcs) {
         threads.push_back(std::make_unique<thread>([scenario, func = thread_func.func] { (scenario.get()->*func)(); }));
     }
-    return threads;
+    return { std::move(threads), std::move(scenario) };
 }
 
 std::vector<thread_state> stabilize(std::span<std::unique_ptr<thread>> threads);
@@ -174,8 +175,11 @@ public:
     void run() {
         tree tree;
         do {
-            auto swarm = launch_threads(m_thread_funcs);
+            auto [swarm, scenario] = launch_threads(m_thread_funcs);
             run_next_interleaving(tree, swarm);
+            if constexpr (requires(Scenario & s) { { s.validate() }; }) {
+                scenario->validate();
+            }
         } while (!is_transitively_complete(tree, tree.root()));
     }
 

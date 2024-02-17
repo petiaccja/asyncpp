@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../testing/suspension_point.hpp"
+
 #include <atomic>
 #include <limits>
 
@@ -13,12 +15,12 @@ public:
 
     Element* set(Element* element) noexcept {
         Element* expected = nullptr;
-        m_item.compare_exchange_strong(expected, element);
+        INTERLEAVED(m_item.compare_exchange_strong(expected, element));
         return expected;
     }
 
     Element* close() noexcept {
-        return m_item.exchange(CLOSED);
+        return INTERLEAVED(m_item.exchange(CLOSED));
     }
 
     bool empty() const noexcept {

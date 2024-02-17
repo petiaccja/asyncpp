@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../testing/suspension_point.hpp"
+
 #include <atomic>
 #include <limits>
 
@@ -15,16 +17,16 @@ public:
         Element* first = nullptr;
         do {
             element->*next = first;
-        } while (first != CLOSED && !m_first.compare_exchange_weak(first, element));
+        } while (first != CLOSED && !INTERLEAVED(m_first.compare_exchange_weak(first, element)));
         return first;
     }
 
     Element* detach() noexcept {
-        return m_first.exchange(nullptr);
+        return INTERLEAVED(m_first.exchange(nullptr));
     }
 
     Element* close() noexcept {
-        return m_first.exchange(CLOSED);
+        return INTERLEAVED(m_first.exchange(CLOSED));
     }
 
     bool empty() const noexcept {
