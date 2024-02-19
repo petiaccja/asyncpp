@@ -1,9 +1,12 @@
 #pragma once
 
-#include <stdexcept>
-#include <atomic>
-#include <memory>
 #include <asyncpp/promise.hpp>
+#include <asyncpp/scheduler.hpp>
+
+#include <atomic>
+#include <cassert>
+#include <memory>
+#include <stdexcept>
 
 
 class monitor_task {

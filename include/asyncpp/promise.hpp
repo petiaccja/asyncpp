@@ -1,10 +1,10 @@
 #pragma once
 
-#include "awaitable.hpp"
-
 #include <atomic>
 #include <coroutine>
+#include <optional>
 #include <utility>
+#include <variant>
 
 
 namespace asyncpp {
@@ -21,10 +21,8 @@ struct task_result {
     std::optional<std::variant<value_type, std::exception_ptr>> m_result;
 
     task_result() = default;
-
-    task_result(value_type value) : m_result(std::move(value)) {}
-
-    task_result(std::exception_ptr value) : m_result(std::move(value)) {}
+    explicit task_result(value_type value) : m_result(std::move(value)) {}
+    explicit task_result(std::exception_ptr value) : m_result(std::move(value)) {}
 
     task_result& operator=(value_type value) {
         m_result = std::move(value);
@@ -59,6 +57,8 @@ struct task_result {
         }
         return std::move(std::get<value_type>(value));
     }
+
+    auto operator<=>(const task_result&) const noexcept = default;
 };
 
 

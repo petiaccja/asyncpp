@@ -1,12 +1,74 @@
+#include "monitor_task.hpp"
+
 #include <asyncpp/join.hpp>
 #include <asyncpp/stream.hpp>
-
-#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 
 using namespace asyncpp;
+
+
+TEST_CASE("Stream: creation", "[Stream]") {
+    const auto coro = []() -> stream<int> {
+        co_yield 0;
+    };
+
+    SECTION("empty") {
+        stream<int> s;
+        REQUIRE(!s.valid());
+    }
+    SECTION("valid") {
+        auto s = coro();
+        REQUIRE(s.valid());
+    }
+}
+
+
+TEST_CASE("Stream: iteration", "[Stream]") {
+    static const auto coro = []() -> stream<int> {
+        co_yield 0;
+        co_yield 1;
+    };
+
+    auto s = coro();
+    auto r = [&]() -> monitor_task {
+        auto i1 = co_await s;
+        REQUIRE(i1);
+        REQUIRE(*i1 == 0);
+        auto i2 = co_await s;
+        REQUIRE(i2);
+        REQUIRE(*i2 == 1);
+        auto i3 = co_await s;
+        REQUIRE(!i3);
+    }();
+    REQUIRE(r.get_counters().done);
+}
+
+
+TEST_CASE("Stream: data types", "[Stream]") {
+    SECTION("value") {
+        static const auto coro = []() -> stream<int> {
+            co_yield 0;
+        };
+        auto r = []() -> monitor_task {
+            auto s = coro();
+            REQUIRE(*(co_await s) == 0);
+        }();
+        REQUIRE(r.get_counters().done);
+    }
+    SECTION("reference") {
+        static int value = 0;
+        static const auto coro = []() -> stream<int&> {
+            co_yield value;
+        };
+        auto r = []() -> monitor_task {
+            auto s = coro();
+            REQUIRE(&*(co_await s) == &value);
+        }();
+        REQUIRE(r.get_counters().done);
+    }
+}
 
 
 TEST_CASE("Stream: destroy", "[Task]") {
@@ -27,45 +89,4 @@ TEST_CASE("Stream: destroy", "[Task]") {
         }
         REQUIRE(impl::leak_checked_promise::check(before));
     }
-}
-
-
-TEST_CASE("Stream: co_await", "[Generator]") {
-    static const auto coro = [](int count) -> stream<int> {
-        static int i;
-        for (i = 0; i < count; ++i) {
-            co_yield i;
-        }
-    };
-    static const auto enclosing = [](int count) -> stream<std::vector<int>> {
-        std::vector<int> values;
-        const auto s = coro(count);
-        while (const auto value = co_await s) {
-            values.push_back(*value);
-        }
-        co_yield values;
-    };
-    const auto results = join(enclosing(4));
-    REQUIRE(results == std::vector{ 0, 1, 2, 3 });
-}
-
-
-TEST_CASE("Stream: co_await - reference", "[Generator]") {
-    static const auto coro = [](int count) -> stream<int&> {
-        static int i;
-        for (i = 0; i < count; ++i) {
-            co_yield i;
-        }
-    };
-    static const auto enclosing = [](int count) -> stream<std::vector<int>> {
-        std::vector<int> values;
-        const auto s = coro(count);
-        while (const auto value = co_await s) {
-            values.push_back(*value);
-            ++value->get();
-        }
-        co_yield values;
-    };
-    const auto results = join(enclosing(8));
-    REQUIRE(results == std::vector{ 0, 2, 4, 6 });
 }

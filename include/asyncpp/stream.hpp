@@ -1,14 +1,12 @@
 #pragma once
 
-#include "awaitable.hpp"
-#include "testing/suspension_point.hpp"
+#include "event.hpp"
+#include "memory/rc_ptr.hpp"
 #include "promise.hpp"
 #include "scheduler.hpp"
 
-#include <cassert>
 #include <coroutine>
 #include <exception>
-#include <future>
 #include <optional>
 #include <utility>
 
@@ -23,50 +21,83 @@ class stream;
 namespace impl_stream {
 
     template <class T>
-    struct promise : resumable_promise, schedulable_promise, impl::leak_checked_promise {
+    using wrapper_type = typename task_result<T>::wrapper_type;
+
+    template <class T>
+    using reference_type = typename task_result<T>::reference;
+
+
+    template <class T>
+    struct item {
+        item(std::optional<wrapper_type<T>> result) : m_result(std::move(result)) {}
+
+        explicit operator bool() const noexcept {
+            return !!m_result;
+        }
+
+        T& operator*() noexcept {
+            assert(m_result);
+            return m_result.value();
+        }
+
+        std::remove_reference_t<T>* operator->() noexcept {
+            assert(m_result);
+            return std::addressof(static_cast<T&>(m_result.value()));
+        }
+
+        const T& operator*() const noexcept {
+            assert(m_result);
+            return m_result.get();
+        }
+
+        const std::remove_reference_t<T>* operator->() const noexcept {
+            assert(m_result);
+            return std::addressof(static_cast<const T&>(m_result.value()));
+        }
+
+    private:
+        std::optional<wrapper_type<T>> m_result;
+    };
+
+
+    template <class T>
+    struct promise : resumable_promise, schedulable_promise, impl::leak_checked_promise, rc_from_this {
         struct yield_awaitable {
-            constexpr bool await_ready() const noexcept {
-                return false;
-            }
+            constexpr bool await_ready() const noexcept { return false; }
 
             void await_suspend(std::coroutine_handle<promise> handle) const noexcept {
                 auto& owner = handle.promise();
-                const auto state = INTERLEAVED(owner.m_state.exchange(READY));
-                assert(state != STOPPED && state != READY);
-                if (state != RUNNING) {
-                    state->on_ready();
-                }
+                assert(owner.m_event);
+                owner.m_event->set(std::move(owner.m_result));
+                owner.m_event.reset();
             }
 
             constexpr void await_resume() const noexcept {}
         };
 
         auto get_return_object() noexcept {
-            return stream<T>(this);
+            return stream<T>(rc_ptr(this));
         }
 
-        constexpr auto initial_suspend() const noexcept {
-            return std::suspend_always{};
+        constexpr std::suspend_always initial_suspend() const noexcept {
+            return {};
         }
 
-        bool await(basic_awaitable<T>* awaiting) {
-            INTERLEAVED(m_state.store(RUNNING));
-            resume();
-            const auto state = INTERLEAVED(m_state.exchange(awaiting));
-            assert(state == RUNNING || state == READY);
-            return state == READY;
+        yield_awaitable final_suspend() const noexcept {
+            return {};
         }
 
-        auto get_result() {
-            return std::move(m_result);
+        yield_awaitable yield_value(T value) noexcept {
+            m_result = std::optional(wrapper_type<T>(std::forward<T>(value)));
+            return {};
         }
 
-        auto final_suspend() const noexcept {
-            return yield_awaitable{};
+        void unhandled_exception() noexcept {
+            m_result = std::current_exception();
         }
 
-        void release() noexcept {
-            handle().destroy();
+        void return_void() noexcept {
+            m_result = std::nullopt;
         }
 
         auto handle() -> std::coroutine_handle<> override {
@@ -77,64 +108,50 @@ namespace impl_stream {
             return m_scheduler ? m_scheduler->schedule(*this) : handle().resume();
         }
 
-        void unhandled_exception() noexcept {
-            m_result = std::current_exception();
+        void destroy() noexcept {
+            handle().destroy();
         }
 
-        auto yield_value(T value) noexcept {
-            m_result = std::forward<T>(value);
-            return yield_awaitable{};
-        }
-
-        void return_void() noexcept {
-            m_result.clear();
-        }
+        auto await() noexcept;
 
     private:
-        static inline const auto STOPPED = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 14);
-        static inline const auto RUNNING = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 13);
-        static inline const auto READY = reinterpret_cast<basic_awaitable<T>*>(std::numeric_limits<size_t>::max() - 12);
-        std::atomic<basic_awaitable<T>*> m_state = STOPPED;
-        task_result<T> m_result;
+        std::optional<event<std::optional<wrapper_type<T>>>> m_event;
+        task_result<std::optional<wrapper_type<T>>> m_result;
     };
 
 
     template <class T>
-    struct awaitable : basic_awaitable<T> {
-        task_result<T> m_result;
-        promise<T>* m_awaited = nullptr;
-        resumable_promise* m_enclosing = nullptr;
+    struct awaitable {
+        using base = typename event<std::optional<wrapper_type<T>>>::awaitable;
 
-        awaitable(promise<T>* awaited) : m_awaited(awaited) {}
+        base m_base;
+        rc_ptr<promise<T>> m_awaited = nullptr;
+
+        awaitable(base base, rc_ptr<promise<T>> awaited) : m_base(base), m_awaited(awaited) {}
 
         bool await_ready() noexcept {
-            return false;
+            return m_base.await_ready();
         }
 
         template <std::convertible_to<const resumable_promise&> Promise>
         bool await_suspend(std::coroutine_handle<Promise> enclosing) {
-            m_enclosing = &enclosing.promise();
-            const bool ready = m_awaited->await(this);
-            return !ready;
+            return m_base.await_suspend(enclosing);
         }
 
-        auto await_resume() -> std::optional<typename task_result<T>::wrapper_type> {
-            // Result was ready in await suspend or result was nullopt.
-            if (!m_result.has_value()) {
-                m_result = m_awaited->get_result();
-            }
-            // Ensure result was truly nullopt.
-            if (!m_result.has_value()) {
-                return std::nullopt;
-            }
-            return m_result.get_or_throw();
-        }
-
-        void on_ready() noexcept final {
-            m_result = m_awaited->get_result();
-            m_enclosing->resume();
+        item<T> await_resume() {
+            return { m_base.await_resume() };
         }
     };
+
+
+    template <class T>
+    auto promise<T>::await() noexcept {
+        assert(!m_event);
+        m_event.emplace();
+        auto aw = awaitable<T>(m_event->operator co_await(), rc_ptr(this));
+        resume();
+        return aw;
+    }
 
 } // namespace impl_stream
 
@@ -147,38 +164,20 @@ public:
     stream() = default;
     stream(const stream&) = delete;
     stream& operator=(const stream&) = delete;
-    stream(stream&& rhs) noexcept : m_promise(std::exchange(rhs.m_promise, nullptr)) {}
-    stream& operator=(stream&& rhs) noexcept {
-        release();
-        m_promise = std::exchange(rhs.m_promise, nullptr);
-        return *this;
-    }
-    stream(promise_type* promise) : m_promise(promise) {}
-    ~stream() {
-        release();
-    }
+    stream(stream&& rhs) noexcept = default;
+    stream& operator=(stream&& rhs) noexcept = default;
+    stream(rc_ptr<promise_type> promise) : m_promise(std::move(promise)) {}
 
     auto operator co_await() const {
-        return impl_stream::awaitable<T>(m_promise);
+        return m_promise->await();
     }
 
-    operator bool() const {
-        return good();
-    }
-
-    bool good() const {
-        return m_promise != nullptr;
+    bool valid() const {
+        return !!m_promise;
     }
 
 private:
-    void release() {
-        if (m_promise) {
-            m_promise->release();
-        }
-    }
-
-private:
-    promise_type* m_promise = nullptr;
+    rc_ptr<promise_type> m_promise;
 };
 
 
