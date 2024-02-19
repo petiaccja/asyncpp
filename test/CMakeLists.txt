@@ -11,8 +11,7 @@ target_sources(test
 		test_generator.cpp
 		test_join.cpp
 		test_mutex.cpp
-		test_shared_mutex.cpp
-		test_shared_task.cpp
+		test_shared_mutex.cpp		
 		test_stream.cpp
 		test_task.cpp
 		test_thread_pool.cpp
