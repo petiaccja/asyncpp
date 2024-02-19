@@ -185,7 +185,7 @@ TEST_CASE("Event: broadcast multiple awaiters", "[Event]") {
 
 
 TEMPLATE_TEST_CASE("Event: await-set interleave", "[Event]", event<int>, broadcast_event<int>) {
-    struct scenario {
+    struct scenario : testing::validated_scenario {
         TestType evt;
         int result = 0;
 
@@ -199,7 +199,8 @@ TEMPLATE_TEST_CASE("Event: await-set interleave", "[Event]", event<int>, broadca
             }(*this);
         }
 
-        void validate() {
+        void validate(const testing::path& p) override {
+            INFO(p.dump());
             REQUIRE(result == 1);
         }
     };

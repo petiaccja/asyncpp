@@ -28,7 +28,7 @@ namespace impl_stream {
 
 
     template <class T>
-    struct item {
+    struct [[nodiscard]] item {
         item(std::optional<wrapper_type<T>> result) : m_result(std::move(result)) {}
 
         explicit operator bool() const noexcept {

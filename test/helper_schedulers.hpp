@@ -30,16 +30,10 @@ private:
 };
 
 
-class thread_queued_scheduler : public asyncpp::scheduler {
-public:
+struct collecting_scheduler : asyncpp::scheduler {
     void schedule(asyncpp::schedulable_promise& promise) override {
-        m_items.push(&promise);
+        this->promise = &promise;
     }
 
-    asyncpp::schedulable_promise* get() {
-        return m_items.pop();
-    }
-
-private:
-    asyncpp::atomic_stack<asyncpp::schedulable_promise, &asyncpp::schedulable_promise::m_scheduler_next> m_items;
+    asyncpp::schedulable_promise* promise;
 };

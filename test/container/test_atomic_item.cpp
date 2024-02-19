@@ -64,7 +64,7 @@ TEST_CASE("Atomic item: close", "[Atomic item]") {
 
 
 TEST_CASE("Atomic item: push-push interleave", "[Atomic item]") {
-    struct scenario {
+    struct scenario : testing::validated_scenario {
         item_t item;
         element e1{ 1 };
         element e2{ 2 };
@@ -77,7 +77,8 @@ TEST_CASE("Atomic item: push-push interleave", "[Atomic item]") {
             item.set(&e2);
         }
 
-        void validate() {
+        void validate(const testing::path& p) override {
+            INFO(p.dump());
             REQUIRE((item.item() == &e1 || item.item() == &e2));
         }
     };
@@ -87,7 +88,7 @@ TEST_CASE("Atomic item: push-push interleave", "[Atomic item]") {
 
 
 TEST_CASE("Atomic item: push-close interleave", "[Atomic item]") {
-    struct scenario {
+    struct scenario: testing::validated_scenario  {
         item_t item;
         element e{ 1 };
         element* volatile closed = nullptr;
@@ -100,7 +101,8 @@ TEST_CASE("Atomic item: push-close interleave", "[Atomic item]") {
             closed = item.close();
         }
 
-        void validate() {
+        void validate(const testing::path& p) override {
+            INFO(p.dump());
             if (closed == nullptr) {
                 REQUIRE(item.closed());
             }

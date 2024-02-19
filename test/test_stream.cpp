@@ -85,7 +85,7 @@ TEST_CASE("Stream: destroy", "[Task]") {
         const auto before = impl::leak_checked_promise::snapshot();
         {
             auto s = coro();
-            join(s);
+            void(join(s));
         }
         REQUIRE(impl::leak_checked_promise::check(before));
     }

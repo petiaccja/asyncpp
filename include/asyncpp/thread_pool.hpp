@@ -1,11 +1,12 @@
 #pragma once
 
 
-#include "scheduler.hpp"
 #include "container/atomic_stack.hpp"
+#include "scheduler.hpp"
 
 #include <atomic>
 #include <condition_variable>
+#include <span>
 #include <thread>
 #include <vector>
 
@@ -14,43 +15,42 @@ namespace asyncpp {
 
 
 class thread_pool : public scheduler {
+public:
     struct worker {
-        worker* m_next;
+        worker* m_next = nullptr;
 
-    public:
-        void add_work_item(schedulable_promise& promise);
-        schedulable_promise* get_work_item();
-        bool has_work() const;
-        bool is_stopped() const;
-        void stop();
-        void wake() const;
-        void wait() const;
-
-    private:
-        atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> m_work_items;
-        mutable std::condition_variable m_wake_cv;
-        mutable std::mutex m_wake_mutex;
-        std::atomic_flag m_terminated;
+        std::jthread thread;
+        atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> worklist;
     };
 
-public:
-    thread_pool(size_t num_threads = std::thread::hardware_concurrency());
+    thread_pool(size_t num_threads = 1);
     thread_pool(thread_pool&&) = delete;
-    thread_pool& operator=(thread_pool&&) = delete;
-    ~thread_pool() noexcept;
+    thread_pool operator=(thread_pool&&) = delete;
+    ~thread_pool();
 
-    void schedule(schedulable_promise& promise) noexcept override;
+    void schedule(schedulable_promise& promise) override;
+
+
+    static void schedule(schedulable_promise& item,
+                         atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
+                         std::condition_variable& global_notification,
+                         worker* local = nullptr);
+
+    static schedulable_promise* steal(std::span<worker> workers);
+
+    static void execute(worker& local,
+                        atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
+                        std::condition_variable& global_notification,
+                        std::atomic_flag& terminate,
+                        std::span<worker> workers);
 
 private:
-    void worker_function(std::shared_ptr<worker> thread) noexcept;
+    std::condition_variable m_global_notification;
+    atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> m_global_worklist;
+    std::vector<worker> m_workers;
+    std::atomic_flag m_terminate;
 
-private:
-    std::vector<std::jthread> m_os_threads;
-    std::vector<std::shared_ptr<worker>> m_workers;
-    atomic_stack<worker, &worker::m_next> m_free_workers;
-
-    static thread_local std::shared_ptr<worker> local_worker;
-    static thread_local thread_pool* local_owner;
+    inline static thread_local worker* local = nullptr;
 };
 
 

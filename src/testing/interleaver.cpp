@@ -215,13 +215,20 @@ bool is_unblocked(const std::vector<thread_state>& states) {
 }
 
 
-int select_resumed(const swarm_state& state, const tree::transition_node& node) {
+int select_resumed(const swarm_state& state, const tree::transition_node& node, const std::vector<std::map<const suspension_point*, size_t>>* hit_counts) {
     std::vector<int> all(state.thread_states.size());
     std::iota(all.begin(), all.end(), 0);
 
     auto viable = all | std::views::filter([&](int thread_idx) { return state.thread_states[thread_idx].is_suspended(); });
     auto undiscovered = viable | std::views::filter([&](int thread_idx) { return !node.successors.contains(thread_idx); });
     auto incomplete = viable | std::views::filter([&](int thread_idx) { return !node.completed.contains(thread_idx); });
+    auto unrepeated = incomplete | std::views::filter([&](int thread_idx) {
+                          if (!hit_counts) {
+                              return true;
+                          }
+                          return !(*hit_counts)[thread_idx].contains(state.thread_states[thread_idx].get_suspension_point())
+                                 || (*hit_counts)[thread_idx].at(state.thread_states[thread_idx].get_suspension_point()) < 3;
+                      });
 
     if (!undiscovered.empty()) {
         return undiscovered.front();
@@ -271,21 +278,52 @@ void mark_complete(tree& tree, tree::stable_node& node) {
 }
 
 
-void run_next_interleaving(tree& tree, std::span<std::unique_ptr<thread>> swarm) {
+path run_next_interleaving(tree& tree, std::span<std::unique_ptr<thread>> swarm) {
+    std::vector<std::map<const suspension_point*, size_t>> hit_counts(swarm.size());
+    path path;
     auto current_node = &tree.root();
 
     do {
-        const auto state = swarm_state(stabilize(swarm));
-        if (std::ranges::all_of(state.thread_states, [](const auto& ts) { return ts == thread_state::completed; })) {
-            break;
+        try {
+            const auto state = swarm_state(stabilize(swarm));
+            path.steps.push_back({ state, -1 });
+            if (std::ranges::all_of(state.thread_states, [](const auto& ts) { return ts == thread_state::completed; })) {
+                break;
+            }
+            for (size_t thread_idx = 0; thread_idx < swarm.size(); ++thread_idx) {
+                const auto& ts = state.thread_states[thread_idx];
+                if (const auto sp = ts.get_suspension_point(); sp != nullptr) {
+                    auto it = hit_counts[thread_idx].find(sp);
+                    if (it == hit_counts[thread_idx].end()) {
+                        it = hit_counts[thread_idx].insert_or_assign(sp, 0).first;
+                    }
+                    ++it->second;
+                }
+            }
+            auto& transition_node = tree.next(*current_node, state);
+            const auto resumed = select_resumed(state, transition_node, &hit_counts);
+            path.steps.back().second = resumed;
+            swarm[resumed]->resume();
+            current_node = &tree.next(transition_node, resumed);
         }
-        auto& transition_node = tree.next(*current_node, state);
-        const auto resumed = select_resumed(state, transition_node);
-        swarm[resumed]->resume();
-        current_node = &tree.next(transition_node, resumed);
+        catch (std::exception&) {
+            std::cerr << path.dump() << std::endl;
+            std::terminate();
+        }
     } while (true);
 
     mark_complete(tree, *current_node);
+    return path;
+}
+
+
+std::string path::dump() const {
+    std::stringstream ss;
+    for (const auto& step : steps) {
+        ss << ::asyncpp::testing::dump(step.first) << std::endl;
+        ss << "  -> " << step.second << std::endl;
+    }
+    return ss.str();
 }
 
 

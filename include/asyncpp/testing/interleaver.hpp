@@ -145,6 +145,19 @@ private:
 };
 
 
+struct path {
+    std::vector<std::pair<swarm_state, int>> steps;
+
+    std::string dump() const;
+};
+
+
+struct validated_scenario {
+    ~validated_scenario() = default;
+    virtual void validate(const path& p) = 0;
+};
+
+
 template <class Scenario>
 auto launch_threads(const std::vector<thread_function<Scenario>>& thread_funcs)
     -> std::pair<std::vector<std::unique_ptr<thread>>, std::shared_ptr<Scenario>> {
@@ -160,10 +173,10 @@ std::vector<thread_state> stabilize(std::span<std::unique_ptr<thread>> threads);
 std::vector<thread_state> get_states(std::span<std::unique_ptr<thread>> threads);
 bool is_stable(const std::vector<thread_state>& v);
 bool is_unblocked(const std::vector<thread_state>& states);
-int select_resumed(const swarm_state& state, const tree::transition_node& node);
+int select_resumed(const swarm_state& state, const tree::transition_node& node, const std::vector<std::map<const suspension_point*, size_t>>* hit_counts = nullptr);
 bool is_transitively_complete(const tree& tree, const tree::stable_node& node);
 void mark_complete(tree& tree, tree::stable_node& node);
-void run_next_interleaving(tree& tree, std::span<std::unique_ptr<thread>> swarm);
+path run_next_interleaving(tree& tree, std::span<std::unique_ptr<thread>> swarm);
 
 
 template <class Scenario>
@@ -176,9 +189,9 @@ public:
         tree tree;
         do {
             auto [swarm, scenario] = launch_threads(m_thread_funcs);
-            run_next_interleaving(tree, swarm);
-            if constexpr (requires(Scenario & s) { { s.validate() }; }) {
-                scenario->validate();
+            const auto path_ = run_next_interleaving(tree, swarm);
+            if constexpr (std::convertible_to<Scenario, validated_scenario>) {
+                scenario->validate(path_);
             }
         } while (!is_transitively_complete(tree, tree.root()));
     }

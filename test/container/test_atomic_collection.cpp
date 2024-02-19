@@ -83,7 +83,7 @@ TEST_CASE("Atomic collection: push to closed", "[Atomic collection]") {
 
 
 TEST_CASE("Atomic collection: push-push interleave", "[Atomic collection]") {
-    struct scenario {
+    struct scenario : testing::validated_scenario {
         collection_t collection;
         collection_element e1{ 1 };
         collection_element e2{ 2 };
@@ -96,7 +96,8 @@ TEST_CASE("Atomic collection: push-push interleave", "[Atomic collection]") {
             collection.push(&e2);
         }
 
-        void validate() {
+        void validate(const testing::path& p) override {
+            INFO(p.dump());
             size_t size = 0;
             collection_element* first = collection.first();
             bool e1_found = false;
@@ -122,7 +123,7 @@ TEST_CASE("Atomic collection: push-push interleave", "[Atomic collection]") {
 
 
 TEST_CASE("Atomic collection: push-detach interleave", "[Atomic collection]") {
-    struct scenario {
+    struct scenario : testing::validated_scenario {
         collection_t collection;
         collection_element e1{ 1 };
         collection_element* volatile detached = nullptr;
@@ -135,7 +136,8 @@ TEST_CASE("Atomic collection: push-detach interleave", "[Atomic collection]") {
             detached = collection.detach();
         }
 
-        void validate() {
+        void validate(const testing::path& p) override {
+            INFO(p.dump());
             if (detached == nullptr) {
                 REQUIRE(collection.first() == &e1);
             }
@@ -151,7 +153,7 @@ TEST_CASE("Atomic collection: push-detach interleave", "[Atomic collection]") {
 
 
 TEST_CASE("Atomic collection: push-close interleave", "[Atomic collection]") {
-    struct scenario {
+    struct scenario : testing::validated_scenario {
         collection_t collection;
         collection_element e1{ 1 };
         collection_element* volatile closed = nullptr;
@@ -164,7 +166,8 @@ TEST_CASE("Atomic collection: push-close interleave", "[Atomic collection]") {
             closed = collection.close();
         }
 
-        void validate() {
+        void validate(const testing::path& p) override {
+            INFO(p.dump());
             if (closed == nullptr) {
                 REQUIRE(collection.closed());
             }
