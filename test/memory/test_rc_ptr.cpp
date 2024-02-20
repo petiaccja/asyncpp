@@ -125,5 +125,4 @@ TEST_CASE("Refcounted pointer - dereference", "[Refcounted pointer]") {
     REQUIRE(ptr->destroyed == 10);
     REQUIRE((*ptr).destroyed == 10);
     REQUIRE(ptr.get()->destroyed == 10);
-
 }

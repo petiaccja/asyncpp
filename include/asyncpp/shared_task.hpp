@@ -81,7 +81,7 @@ namespace impl_shared_task {
 
         rc_ptr<promise<T>> m_awaited = nullptr;
 
-        awaitable(base base, rc_ptr<promise<T>> awaited) : base(std::move(base)), m_awaited(awaited) {
+        awaitable(base base, rc_ptr<promise<T>> awaited) : broadcast_event<T>::awaitable(std::move(base)), m_awaited(awaited) {
             assert(m_awaited);
         }
     };

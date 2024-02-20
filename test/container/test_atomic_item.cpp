@@ -88,7 +88,7 @@ TEST_CASE("Atomic item: push-push interleave", "[Atomic item]") {
 
 
 TEST_CASE("Atomic item: push-close interleave", "[Atomic item]") {
-    struct scenario: testing::validated_scenario  {
+    struct scenario : testing::validated_scenario {
         item_t item;
         element e{ 1 };
         element* volatile closed = nullptr;
