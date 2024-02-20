@@ -81,7 +81,7 @@ void thread_pool::execute(worker& local,
                 return INTERLEAVED_ACQUIRE(terminate.test());
             });
         }
-    } while (!INTERLEAVED(local.worklist.empty()) || !INTERLEAVED(global_worklist.empty())|| !INTERLEAVED(terminate.test()));
+    } while (!INTERLEAVED(local.worklist.empty()) || !INTERLEAVED(global_worklist.empty()) || !INTERLEAVED(terminate.test()));
 }
 
 

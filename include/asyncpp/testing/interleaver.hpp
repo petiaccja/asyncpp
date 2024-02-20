@@ -64,10 +64,10 @@ public:
 
     template <class Func, class... Args>
     thread(Func func, Args&&... args) {
-        const auto wrapper = [ this, func = std::move(func) ]<Args... args>(Args && ... args_) {
+        const auto wrapper = [this, func = std::move(func)]<class... Args_>(std::stop_token, Args_&&... args_) {
             initialize_this_thread();
             INTERLEAVED("initial_point");
-            func(std::forward<Args>(args_)...);
+            func(std::forward<Args_>(args_)...);
             m_content->state.store(thread_state::completed);
         };
         m_content->thread = std::jthread(wrapper, std::forward<Args>(args)...);
