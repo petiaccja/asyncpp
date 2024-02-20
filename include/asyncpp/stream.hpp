@@ -68,6 +68,7 @@ namespace impl_stream {
             void await_suspend(std::coroutine_handle<promise> handle) const noexcept {
                 auto& owner = handle.promise();
                 assert(owner.m_event);
+                assert(owner.m_result.has_value());
                 owner.m_event->set(std::move(owner.m_result));
             }
 

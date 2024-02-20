@@ -53,7 +53,8 @@ TEST_CASE("Stream: data types", "[Stream]") {
         };
         auto r = []() -> monitor_task {
             auto s = coro();
-            REQUIRE(*(co_await s) == 0);
+            auto item = co_await s;
+            REQUIRE(*item == 0);
         }();
         REQUIRE(r.get_counters().done);
     }
@@ -64,7 +65,8 @@ TEST_CASE("Stream: data types", "[Stream]") {
         };
         auto r = []() -> monitor_task {
             auto s = coro();
-            REQUIRE(&*(co_await s) == &value);
+            auto item = co_await s;
+            REQUIRE(&*item == &value);
         }();
         REQUIRE(r.get_counters().done);
     }

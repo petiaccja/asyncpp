@@ -204,8 +204,5 @@ private:
 } // namespace asyncpp::testing
 
 
-#define INTERLEAVED_RUN(SCENARIO, ...) \
-    asyncpp::testing::interleaver<SCENARIO>({ __VA_ARGS__ }).run()
-
-#define THREAD(NAME, METHOD) \
-    asyncpp::testing::thread_function(NAME, METHOD)
+#define INTERLEAVED_RUN(SCENARIO, ...) asyncpp::testing::interleaver<SCENARIO>({ __VA_ARGS__ }).run()
+#define THREAD(NAME, METHOD) asyncpp::testing::thread_function(NAME, METHOD)
