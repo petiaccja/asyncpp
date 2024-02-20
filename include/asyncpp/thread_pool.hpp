@@ -35,6 +35,7 @@ public:
                          atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
                          std::condition_variable& global_notification,
                          std::mutex& global_mutex,
+                         std::atomic_size_t& num_waiting,
                          worker* local = nullptr);
 
     static schedulable_promise* steal(std::span<worker> workers);
@@ -44,6 +45,7 @@ public:
                         std::condition_variable& global_notification,
                         std::mutex& global_mutex,
                         std::atomic_flag& terminate,
+                        std::atomic_size_t& num_waiting,
                         std::span<worker> workers);
 
 private:
@@ -52,6 +54,7 @@ private:
     atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> m_global_worklist;
     std::vector<worker> m_workers;
     std::atomic_flag m_terminate;
+    std::atomic_size_t m_num_waiting = 0;
 
     inline static thread_local worker* local = nullptr;
 };

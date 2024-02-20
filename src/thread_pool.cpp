@@ -10,20 +10,21 @@ thread_pool::thread_pool(size_t num_threads)
     for (auto& w : m_workers) {
         w.thread = std::jthread([this, &w] {
             local = &w;
-            execute(w, m_global_worklist, m_global_notification, m_global_mutex, m_terminate, m_workers);
+            execute(w, m_global_worklist, m_global_notification, m_global_mutex, m_terminate, m_num_waiting, m_workers);
         });
     }
 }
 
 
 thread_pool::~thread_pool() {
+    std::lock_guard lk(m_global_mutex);
     m_terminate.test_and_set();
     m_global_notification.notify_all();
 }
 
 
 void thread_pool::schedule(schedulable_promise& promise) {
-    schedule(promise, m_global_worklist, m_global_notification, m_global_mutex, local);
+    schedule(promise, m_global_worklist, m_global_notification, m_global_mutex, m_num_waiting, local);
 }
 
 
@@ -31,11 +32,14 @@ void thread_pool::schedule(schedulable_promise& item,
                            atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
                            std::condition_variable& global_notification,
                            std::mutex& global_mutex,
+                           std::atomic_size_t& num_waiting,
                            worker* local) {
     if (local) {
         const auto prev_item = INTERLEAVED(local->worklist.push(&item));
         if (prev_item != nullptr) {
-            INTERLEAVED(global_notification.notify_one()); // Notify one thread to potentially steal item.
+            if (num_waiting.load(std::memory_order_relaxed) > 0) {
+                global_notification.notify_one();
+            }
         }
     }
     else {
@@ -62,30 +66,31 @@ void thread_pool::execute(worker& local,
                           std::condition_variable& global_notification,
                           std::mutex& global_mutex,
                           std::atomic_flag& terminate,
+                          std::atomic_size_t& num_waiting,
                           std::span<worker> workers) {
     do {
-        const auto item = INTERLEAVED(local.worklist.pop());
-        if (item != nullptr) {
+        if (const auto item = INTERLEAVED(local.worklist.pop())) {
             item->handle().resume();
+            continue;
+        }
+        else if (const auto item = INTERLEAVED(global_worklist.pop())) {
+            local.worklist.push(item);
+            continue;
+        }
+        else if (const auto item = steal(workers)) {
+            local.worklist.push(item);
+            continue;
         }
         else {
             std::unique_lock lk(global_mutex, std::defer_lock);
             INTERLEAVED_ACQUIRE(lk.lock());
-            global_notification.wait(lk, [&] {
-                const auto global = INTERLEAVED(global_worklist.pop());
-                if (global) {
-                    local.worklist.push(global);
-                    return INTERLEAVED_ACQUIRE(true);
-                }
-                const auto stolen = steal(workers);
-                if (stolen) {
-                    local.worklist.push(stolen);
-                    return INTERLEAVED_ACQUIRE(true);
-                }
-                return INTERLEAVED_ACQUIRE(terminate.test());
-            });
+            if (!INTERLEAVED(terminate.test()) && INTERLEAVED(global_worklist.empty())) {
+                num_waiting.fetch_add(1, std::memory_order_relaxed);
+                INTERLEAVED_ACQUIRE(global_notification.wait(lk));
+                num_waiting.fetch_sub(1, std::memory_order_relaxed);
+            }
         }
-    } while (!INTERLEAVED(local.worklist.empty()) || !INTERLEAVED(global_worklist.empty()) || !INTERLEAVED(terminate.test()));
+    } while (!INTERLEAVED(terminate.test()));
 }
 
 

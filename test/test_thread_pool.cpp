@@ -30,17 +30,18 @@ TEST_CASE("Thread pool: schedule worklist selection", "[Thread pool]") {
     std::condition_variable global_notification;
     std::mutex global_mutex;
     atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> global_worklist;
+    std::atomic_size_t num_waiting;
     std::vector<thread_pool::worker> workers(1);
 
     test_promise promise;
 
     SECTION("has local worker") {
-        thread_pool::schedule(promise, global_worklist, global_notification, global_mutex, &workers[0]);
+        thread_pool::schedule(promise, global_worklist, global_notification, global_mutex, num_waiting, &workers[0]);
         REQUIRE(workers[0].worklist.pop() == &promise);
         REQUIRE(global_worklist.empty());
     }
     SECTION("no local worker") {
-        thread_pool::schedule(promise, global_worklist, global_notification, global_mutex, &workers[0]);
+        thread_pool::schedule(promise, global_worklist, global_notification, global_mutex, num_waiting, &workers[0]);
         REQUIRE(workers[0].worklist.pop() == &promise);
     }
 }
@@ -69,6 +70,7 @@ TEST_CASE("Thread pool: ensure execution", "[Thread pool]") {
         std::condition_variable global_notification;
         std::mutex global_mutex;
         atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> global_worklist;
+        std::atomic_size_t num_waiting;
         std::vector<thread_pool::worker> workers;
         std::atomic_flag terminate;
         test_promise promise;
@@ -76,13 +78,15 @@ TEST_CASE("Thread pool: ensure execution", "[Thread pool]") {
         scenario() : workers(1) {}
 
         void schedule() {
-            thread_pool::schedule(promise, global_worklist, global_notification, global_mutex);
+            thread_pool::schedule(promise, global_worklist, global_notification, global_mutex, num_waiting);
+            std::unique_lock lk(global_mutex, std::defer_lock);
+            INTERLEAVED_ACQUIRE(lk.lock());
             INTERLEAVED(terminate.test_and_set());
-            global_notification.notify_all();
+            INTERLEAVED(global_notification.notify_all());
         }
 
         void execute() {
-            thread_pool::execute(workers[0], global_worklist, global_notification, global_mutex, terminate, std::span(workers));
+            thread_pool::execute(workers[0], global_worklist, global_notification, global_mutex, terminate, num_waiting, std::span(workers));
         }
 
         void validate(const testing::path& p) override {
