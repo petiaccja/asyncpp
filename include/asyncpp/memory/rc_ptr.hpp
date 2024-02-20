@@ -47,6 +47,7 @@ public:
     }
 
     rc_ptr& operator=(rc_ptr&& other) noexcept(std::is_nothrow_move_constructible_v<Deleter>) {
+        decrement();
         m_ptr = std::exchange(other.m_ptr, nullptr);
         m_deleter = std::move(other.m_deleter);
         return *this;

@@ -26,7 +26,8 @@ namespace impl_shared_task {
             void await_suspend(std::coroutine_handle<promise> handle) noexcept {
                 auto& owner = handle.promise();
                 owner.m_event.set(owner.m_result);
-                owner.m_self.reset();
+                auto self = std::move(owner.m_self); // owner.m_self.reset() call method on owner after it's been deleted.
+                self.reset();
             }
             constexpr void await_resume() const noexcept {}
         };

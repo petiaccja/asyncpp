@@ -75,8 +75,8 @@ void mutex::unlock() {
 
 
 void mutex::_debug_clear() noexcept {
-    while (m_queue.pop_front()) {
-    }
+    m_queue.~deque();
+    new (&m_queue) decltype(m_queue);
 }
 
 

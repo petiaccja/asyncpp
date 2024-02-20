@@ -148,8 +148,8 @@ void shared_mutex::unlock_shared() {
 
 
 void shared_mutex::_debug_clear() noexcept {
-    while (m_queue.pop_front()) {
-    }
+    m_queue.~deque();
+    new (&m_queue) decltype(m_queue);
     m_shared_count = 0;
 }
 

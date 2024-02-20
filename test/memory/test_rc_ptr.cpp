@@ -118,6 +118,42 @@ TEST_CASE("Refcounted pointer - copy assign", "[Refcounted pointer]") {
 }
 
 
+TEST_CASE("Refcounted pointer - move assign overwrite", "[Refcounted pointer]") {
+    managed object_prev;
+    managed object_over;
+    {
+        rc_ptr prev(&object_prev);
+        rc_ptr over(&object_over);
+        prev = std::move(over);
+
+        REQUIRE(prev);
+        REQUIRE(!over);
+        REQUIRE(prev.use_count() == 1);
+        REQUIRE(object_prev.destroyed == 1);
+        REQUIRE(object_over.destroyed == 0);
+    }
+    REQUIRE(object_prev.destroyed == 1);
+}
+
+
+TEST_CASE("Refcounted pointer - copy assign overwrite", "[Refcounted pointer]") {
+    managed object_prev;
+    managed object_over;
+    {
+        rc_ptr prev(&object_prev);
+        rc_ptr over(&object_over);
+        prev = over;
+
+        REQUIRE(prev);
+        REQUIRE(over);
+        REQUIRE(prev.use_count() == 2);
+        REQUIRE(object_prev.destroyed == 1);
+        REQUIRE(object_over.destroyed == 0);
+    }
+    REQUIRE(object_prev.destroyed == 1);
+}
+
+
 TEST_CASE("Refcounted pointer - dereference", "[Refcounted pointer]") {
     managed object;
     object.destroyed = 10;

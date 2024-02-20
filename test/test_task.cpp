@@ -84,26 +84,27 @@ TEMPLATE_TEST_CASE("Task: interleaving co_await", "[Task]", task<int>, shared_ta
 
 
 TEMPLATE_TEST_CASE("Task: interleaving abandon", "[Task]", task<int>, shared_task<int>) {
-    struct scenario {
+    struct scenario : testing::validated_scenario {
         thread_locked_scheduler sched;
         TestType result;
 
         scenario() {
-            constexpr auto func = []() -> TestType {
-                co_return 1;
-            };
-
-            result = launch(func(), sched);
+            result = launch(coro(), sched);
         }
+
+        TestType coro() {
+            co_return 1;
+        };
 
         void task() {
             sched.resume();
-            result = {};
         }
 
         void abandon() {
             result = {};
         }
+
+        void validate(const testing::path& path) override {}
     };
 
     INTERLEAVED_RUN(

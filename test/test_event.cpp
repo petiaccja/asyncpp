@@ -88,7 +88,7 @@ TEST_CASE("Event: types", "[Event]") {
     SECTION("value") {
         event<int> evt;
         evt.set_value(1);
-        [&]() -> monitor_task {
+        auto monitor = [&]() -> monitor_task {
             const auto result = co_await evt;
             REQUIRE(result == 1);
         }();
@@ -97,7 +97,7 @@ TEST_CASE("Event: types", "[Event]") {
         event<int&> evt;
         int value = 1;
         evt.set_value(value);
-        [&]() -> monitor_task {
+        auto monitor = [&]() -> monitor_task {
             const auto& result = co_await evt;
             REQUIRE(&result == &value);
         }();
@@ -105,7 +105,7 @@ TEST_CASE("Event: types", "[Event]") {
     SECTION("void") {
         event<void> evt;
         evt.set_value();
-        [&]() -> monitor_task {
+        auto monitor = [&]() -> monitor_task {
             co_await evt;
         }();
     }
@@ -116,7 +116,7 @@ TEST_CASE("Event: broadcast types", "[Event]") {
     SECTION("value") {
         broadcast_event<int> evt;
         evt.set_value(1);
-        [&]() -> monitor_task {
+        auto monitor = [&]() -> monitor_task {
             const auto result = co_await evt;
             REQUIRE(result == 1);
         }();
@@ -125,7 +125,7 @@ TEST_CASE("Event: broadcast types", "[Event]") {
         broadcast_event<int&> evt;
         int value = 1;
         evt.set_value(value);
-        [&]() -> monitor_task {
+        auto monitor = [&]() -> monitor_task {
             const auto& result = co_await evt;
             REQUIRE(&result == &value);
         }();
@@ -133,7 +133,7 @@ TEST_CASE("Event: broadcast types", "[Event]") {
     SECTION("void") {
         broadcast_event<void> evt;
         evt.set_value();
-        [&]() -> monitor_task {
+        auto monitor = [&]() -> monitor_task {
             co_await evt;
         }();
     }
@@ -187,6 +187,7 @@ TEST_CASE("Event: broadcast multiple awaiters", "[Event]") {
 TEMPLATE_TEST_CASE("Event: await-set interleave", "[Event]", event<int>, broadcast_event<int>) {
     struct scenario : testing::validated_scenario {
         TestType evt;
+        monitor_task monitor;
         int result = 0;
 
         void thread_1() {
@@ -194,7 +195,7 @@ TEMPLATE_TEST_CASE("Event: await-set interleave", "[Event]", event<int>, broadca
         }
 
         void thread_2() {
-            [](scenario& s) -> monitor_task {
+            monitor = [](scenario& s) -> monitor_task {
                 s.result = co_await s.evt;
             }(*this);
         }

@@ -10,7 +10,7 @@
 #include <stdexcept>
 
 
-class monitor_task {
+class [[nodiscard]] monitor_task {
     struct counters {
         std::atomic_size_t suspensions;
         std::atomic_bool done;
@@ -18,14 +18,6 @@ class monitor_task {
     };
 
     struct promise : asyncpp::resumable_promise, asyncpp::schedulable_promise, asyncpp::rc_from_this {
-        struct final_suspend {
-            constexpr bool await_ready() const noexcept { return false; }
-            void await_suspend(std::coroutine_handle<promise> handle) const noexcept {
-                handle.promise().m_self.reset();
-            }
-            constexpr void await_resume() const noexcept {}
-        };
-
         monitor_task get_return_object() noexcept {
             return monitor_task{ asyncpp::rc_ptr(this) };
         }
@@ -34,9 +26,8 @@ class monitor_task {
             return {};
         }
 
-        final_suspend final_suspend() noexcept {
+        std::suspend_always final_suspend() noexcept {
             m_counters->done.store(true);
-            m_self.reset();
             return {};
         }
 
@@ -64,7 +55,6 @@ class monitor_task {
         }
 
     private:
-        asyncpp::rc_ptr<promise> m_self = asyncpp::rc_ptr(this);
         std::shared_ptr<counters> m_counters = std::make_shared<counters>();
     };
 
@@ -75,6 +65,8 @@ public:
     monitor_task(asyncpp::rc_ptr<promise_type> promise) : m_promise(std::move(promise)) {}
     monitor_task(monitor_task&&) = default;
     monitor_task(const monitor_task&) = delete;
+    monitor_task& operator=(monitor_task&&) = default;
+    monitor_task& operator=(const monitor_task&) = delete;
 
     promise_type& promise() {
         assert(m_promise);
