@@ -3,37 +3,64 @@
 #include "../threading/spinlock.hpp"
 
 #include <mutex>
+#include <utility>
 
 
 namespace asyncpp {
+
+
+template <class Element, Element* Element::*next>
+class stack {
+public:
+    Element* push(Element* element) noexcept {
+        element->*next = m_top;
+        return std::exchange(m_top, element);
+    }
+
+    Element* pop() noexcept {
+        const auto new_top = m_top ? m_top->*next : nullptr;
+        return std::exchange(m_top, new_top);
+    }
+
+    Element* top() const noexcept {
+        return m_top;
+    }
+
+    bool empty() const noexcept {
+        return m_top == nullptr;
+    }
+
+private:
+    Element* m_top = nullptr;
+};
+
 
 template <class Element, Element* Element::*next>
 class atomic_stack {
 public:
     Element* push(Element* element) noexcept {
-        std::lock_guard lk(m_mtx);
-        const auto prev_first = m_first.load(std::memory_order_relaxed);
-        element->*next = prev_first;
-        m_first = element;
-        return prev_first;
+        std::lock_guard lk(m_mutex);
+        return m_container.push(element);
     }
 
     Element* pop() noexcept {
-        std::lock_guard lk(m_mtx);
-        const auto prev_first = m_first.load(std::memory_order_relaxed);
-        if (prev_first != nullptr) {
-            m_first = prev_first->*next;
-        }
-        return prev_first;
+        std::lock_guard lk(m_mutex);
+        return m_container.pop();
+    }
+
+    Element* top() const noexcept {
+        std::lock_guard lk(m_mutex);
+        return m_container.top();
     }
 
     bool empty() const noexcept {
-        return m_first.load(std::memory_order_relaxed) == nullptr;
+        std::lock_guard lk(m_mutex);
+        return m_container.empty();
     }
 
 private:
-    std::atomic<Element*> m_first = nullptr;
-    mutable spinlock m_mtx;
+    stack<Element, next> m_container;
+    mutable spinlock m_mutex;
 };
 
 } // namespace asyncpp

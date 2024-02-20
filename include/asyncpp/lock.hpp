@@ -48,7 +48,7 @@ private:
 
 template <class Mutex>
 class unique_lock {
-    using mutex_awaitable = std::invoke_result_t<decltype(&Mutex::unique), Mutex*>;
+    using mutex_awaitable = std::invoke_result_t<decltype(&Mutex::exclusive), Mutex*>;
     struct awaitable {
         unique_lock* m_lock;
         mutex_awaitable m_awaitable;
@@ -99,7 +99,7 @@ public:
 
     auto operator co_await() noexcept {
         assert(!owns_lock());
-        return awaitable(this, m_mtx->unique());
+        return awaitable(this, m_mtx->exclusive());
     }
 
     void unlock() noexcept {

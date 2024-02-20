@@ -1,288 +1,299 @@
-#include <asyncpp/interleaving/runner.hpp>
-#include <asyncpp/join.hpp>
+#include "monitor_task.hpp"
+
 #include <asyncpp/shared_mutex.hpp>
-#include <asyncpp/task.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 using namespace asyncpp;
 
 
-TEST_CASE("Shared mutex: try lock", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        REQUIRE(mtx.try_lock());
-        REQUIRE(!mtx.try_lock());
-        REQUIRE(!mtx.try_lock_shared());
-        mtx.unlock();
-        co_return;
-    };
+struct [[nodiscard]] scope_clear {
+    ~scope_clear() {
+        mtx._debug_clear();
+    }
+    shared_mutex& mtx;
+};
 
-    shared_mutex mtx;
-    join(coro(mtx));
+
+static monitor_task lock_exclusively(shared_mutex& mtx) {
+    co_await mtx.exclusive();
 }
 
 
-TEST_CASE("Shared mutex: lock", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        co_await mtx.unique();
-        REQUIRE(!mtx.try_lock());
-        REQUIRE(!mtx.try_lock_shared());
-        mtx.unlock();
-    };
+static monitor_task lock_shared(shared_mutex& mtx) {
+    co_await mtx.shared();
+}
 
+
+static monitor_task lock(unique_lock<shared_mutex>& lk) {
+    co_await lk;
+}
+
+
+static monitor_task lock(shared_lock<shared_mutex>& lk) {
+    co_await lk;
+}
+
+
+TEST_CASE("Shared mutex: try lock", "[Shared mutex]") {
     shared_mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    SECTION("exclusive") {
+        REQUIRE(mtx.try_lock());
+        REQUIRE(mtx._debug_is_exclusive_locked());
+    }
+
+    SECTION("shared") {
+        REQUIRE(mtx.try_lock_shared());
+        REQUIRE(mtx._debug_is_shared_locked());
+    }
+}
+
+
+TEST_CASE("Shared mutex: lock direct immediate", "[Shared mutex]") {
+    shared_mutex mtx;
+    scope_clear guard(mtx);
+
+    SECTION("exclusive") {
+        auto monitor = lock_exclusively(mtx);
+        REQUIRE(monitor.get_counters().done);
+        REQUIRE(mtx._debug_is_exclusive_locked());
+    }
+    SECTION("shared") {
+        auto monitor = lock_shared(mtx);
+        REQUIRE(monitor.get_counters().done);
+        REQUIRE(mtx._debug_is_shared_locked());
+    }
+}
+
+
+TEST_CASE("Shared mutex: lock spurious immediate", "[Shared mutex]") {
+    shared_mutex mtx;
+    scope_clear guard(mtx);
+
+    SECTION("exclusive") {
+        auto awaiter = mtx.exclusive();
+        auto enclosing = []() -> monitor_task { co_return; }();
+        REQUIRE(false == awaiter.await_suspend(enclosing.handle()));
+        REQUIRE(mtx._debug_is_exclusive_locked());
+    }
+    SECTION("shared") {
+        auto awaiter = mtx.shared();
+        auto enclosing = []() -> monitor_task { co_return; }();
+        REQUIRE(false == awaiter.await_suspend(enclosing.handle()));
+        REQUIRE(mtx._debug_is_shared_locked());
+    }
+    SECTION("shared - shared") {
+        mtx.try_lock_shared();
+        auto awaiter = mtx.shared();
+        auto enclosing = []() -> monitor_task { co_return; }();
+        REQUIRE(false == awaiter.await_suspend(enclosing.handle()));
+        REQUIRE(mtx._debug_is_shared_locked());
+    }
+}
+
+
+TEST_CASE("Shared mutex: sequencial locking attempts", "[Shared mutex]") {
+    shared_mutex mtx;
+    scope_clear guard(mtx);
+
+    SECTION("exclusive - exclusive") {
+        REQUIRE(mtx.try_lock());
+        REQUIRE(!mtx.try_lock());
+    }
+    SECTION("exclusive - shared") {
+        REQUIRE(mtx.try_lock());
+        REQUIRE(!mtx.try_lock_shared());
+    }
+    SECTION("shared - exclusive") {
+        REQUIRE(mtx.try_lock_shared());
+        REQUIRE(!mtx.try_lock());
+    }
+    SECTION("shared - shared") {
+        REQUIRE(mtx.try_lock_shared());
+        REQUIRE(mtx.try_lock_shared());
+    }
 }
 
 
 TEST_CASE("Shared mutex: unlock", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        co_await mtx.unique();
+    shared_mutex mtx;
+    scope_clear guard(mtx);
+
+    SECTION("exclusive -> free") {
+        mtx.try_lock();
         mtx.unlock();
-        REQUIRE(mtx.try_lock());
+        REQUIRE(!mtx._debug_is_exclusive_locked());
+        REQUIRE(!mtx._debug_is_shared_locked());
+    }
+    SECTION("shared * n -> free") {
+        mtx.try_lock_shared();
+        mtx.try_lock_shared();
+        mtx.unlock_shared();
+        REQUIRE(!mtx._debug_is_exclusive_locked());
+        REQUIRE(mtx._debug_is_shared_locked());
+        mtx.unlock_shared();
+        REQUIRE(!mtx._debug_is_exclusive_locked());
+        REQUIRE(!mtx._debug_is_shared_locked());
+    }
+    SECTION("locked -> exclusive") {
+        mtx.try_lock();
+
+        auto monitor1 = lock_exclusively(mtx);
+        auto monitor2 = lock_exclusively(mtx);
+
+        REQUIRE(!monitor1.get_counters().done);
+        REQUIRE(!monitor2.get_counters().done);
+
         mtx.unlock();
-        REQUIRE(mtx.try_lock_shared());
-        mtx.unlock_shared();
-    };
 
-    shared_mutex mtx;
-    join(coro(mtx));
-}
+        REQUIRE(monitor1.get_counters().done);
+        REQUIRE(!monitor2.get_counters().done);
+    }
+    SECTION("locked -> shared * n") {
+        mtx.try_lock();
 
+        auto monitor1 = lock_shared(mtx);
+        auto monitor2 = lock_shared(mtx);
+        auto monitor3 = lock_exclusively(mtx);
 
-TEST_CASE("Shared mutex: try lock shared", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        REQUIRE(mtx.try_lock_shared());
-        REQUIRE(!mtx.try_lock());
-        REQUIRE(mtx.try_lock_shared());
-        mtx.unlock_shared();
-        mtx.unlock_shared();
-        co_return;
-    };
+        REQUIRE(!monitor1.get_counters().done);
+        REQUIRE(!monitor2.get_counters().done);
+        REQUIRE(!monitor3.get_counters().done);
 
-    shared_mutex mtx;
-    join(coro(mtx));
-}
-
-
-TEST_CASE("Shared mutex: lock shared", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        co_await mtx.shared();
-        REQUIRE(!mtx.try_lock());
-        REQUIRE(mtx.try_lock_shared());
-        mtx.unlock_shared();
-        mtx.unlock_shared();
-    };
-
-    shared_mutex mtx;
-    join(coro(mtx));
-}
-
-
-TEST_CASE("Shared mutex: unlock shared", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        co_await mtx.shared();
-        mtx.unlock_shared();
-        REQUIRE(mtx.try_lock());
         mtx.unlock();
-        REQUIRE(mtx.try_lock_shared());
-        mtx.unlock_shared();
-    };
 
-    shared_mutex mtx;
-    join(coro(mtx));
+        REQUIRE(monitor1.get_counters().done);
+        REQUIRE(monitor2.get_counters().done);
+        REQUIRE(!monitor3.get_counters().done);
+    }
 }
 
 
-TEST_CASE("Shared mutex: unique lock try", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        unique_lock lk(mtx);
-        REQUIRE(!lk.owns_lock());
-        REQUIRE(lk.try_lock());
-        REQUIRE(lk.owns_lock());
-        co_return;
-    };
-
+TEST_CASE("Shared mutex: unique lock try_lock", "[Shared mutex]") {
     shared_mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    unique_lock lk(mtx);
+    REQUIRE(!lk.owns_lock());
+
+    lk.try_lock();
+    REQUIRE(lk.owns_lock());
+    REQUIRE(mtx._debug_is_exclusive_locked());
 }
 
 
 TEST_CASE("Shared mutex: unique lock await", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        unique_lock lk(mtx);
-        REQUIRE(!lk.owns_lock());
-        co_await lk;
-        REQUIRE(lk.owns_lock());
-        co_return;
-    };
-
     shared_mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    unique_lock lk(mtx);
+    auto monitor = lock(lk);
+    REQUIRE(monitor.get_counters().done);
+    REQUIRE(lk.owns_lock());
+    REQUIRE(mtx._debug_is_exclusive_locked());
 }
 
 
 TEST_CASE("Shared mutex: unique lock start locked", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        unique_lock lk(co_await mtx.unique());
-        REQUIRE(lk.owns_lock());
-        co_return;
-    };
-
     shared_mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    auto monitor = [](shared_mutex& mtx) -> monitor_task {
+        unique_lock lk(co_await mtx.exclusive());
+        REQUIRE(lk.owns_lock());
+        REQUIRE(mtx._debug_is_exclusive_locked());
+    }(mtx);
+
+    REQUIRE(monitor.get_counters().done);
 }
 
 
 TEST_CASE("Shared mutex: unique lock unlock", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        unique_lock lk(co_await mtx.unique());
-        lk.unlock();
-        REQUIRE(!lk.owns_lock());
-        co_return;
-    };
-
     shared_mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    unique_lock lk(mtx);
+    lk.try_lock();
+    lk.unlock();
+    REQUIRE(!lk.owns_lock());
+    REQUIRE(!mtx._debug_is_exclusive_locked());
 }
 
 
-TEST_CASE("Shared mutex: shared lock try", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        shared_lock lk(mtx);
-        REQUIRE(!lk.owns_lock());
-        REQUIRE(lk.try_lock());
-        REQUIRE(lk.owns_lock());
-        co_return;
-    };
-
+TEST_CASE("Shared mutex: unique lock destructor", "[Shared mutex]") {
     shared_mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    {
+        unique_lock lk(mtx);
+        lk.try_lock();
+    }
+
+    REQUIRE(!mtx._debug_is_exclusive_locked());
+}
+
+
+TEST_CASE("Shared mutex: shared lock try_lock", "[Shared mutex]") {
+    shared_mutex mtx;
+    scope_clear guard(mtx);
+
+    shared_lock lk(mtx);
+    REQUIRE(!lk.owns_lock());
+
+    lk.try_lock();
+    REQUIRE(lk.owns_lock());
+    REQUIRE(mtx._debug_is_shared_locked());
 }
 
 
 TEST_CASE("Shared mutex: shared lock await", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        shared_lock lk(mtx);
-        REQUIRE(!lk.owns_lock());
-        co_await lk;
-        REQUIRE(lk.owns_lock());
-        co_return;
-    };
-
     shared_mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    shared_lock lk(mtx);
+    auto monitor = lock(lk);
+    REQUIRE(monitor.get_counters().done);
+    REQUIRE(lk.owns_lock());
+    REQUIRE(mtx._debug_is_shared_locked());
 }
 
 
 TEST_CASE("Shared mutex: shared lock start locked", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
+    shared_mutex mtx;
+    scope_clear guard(mtx);
+
+    auto monitor = [](shared_mutex& mtx) -> monitor_task {
         shared_lock lk(co_await mtx.shared());
         REQUIRE(lk.owns_lock());
-        co_return;
-    };
+        REQUIRE(mtx._debug_is_shared_locked());
+    }(mtx);
 
-    shared_mutex mtx;
-    join(coro(mtx));
+    REQUIRE(monitor.get_counters().done);
 }
 
 
 TEST_CASE("Shared mutex: shared lock unlock", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        shared_lock lk(co_await mtx.shared());
-        REQUIRE(lk.owns_lock());
-        lk.unlock();
-        REQUIRE(!lk.owns_lock());
-        co_return;
-    };
-
     shared_mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    shared_lock lk(mtx);
+    lk.try_lock();
+    lk.unlock();
+    REQUIRE(!lk.owns_lock());
+    REQUIRE(!mtx._debug_is_shared_locked());
 }
 
 
-TEST_CASE("Shared mutex: shared lock destroy", "[Shared mutex]") {
-    static const auto coro = [](shared_mutex& mtx) -> task<void> {
-        {
-            shared_lock lk(co_await mtx.shared());
-            REQUIRE(lk.owns_lock());
-        }
-        REQUIRE(mtx.try_lock());
-        mtx.unlock();
-        co_return;
-    };
-
+TEST_CASE("Shared mutex: shared lock destructor", "[Shared mutex]") {
     shared_mutex mtx;
-    join(coro(mtx));
-}
+    scope_clear guard(mtx);
 
+    {
+        shared_lock lk(mtx);
+        lk.try_lock();
+    }
 
-TEST_CASE("Shared mutex: resume awaiting", "[Shared mutex]") {
-    static const auto awaiter = [](shared_mutex& mtx, std::vector<int>& sequence, int id) -> task<void> {
-        co_await mtx.unique();
-        sequence.push_back(id);
-        mtx.unlock();
-    };
-    static const auto shared_awaiter = [](shared_mutex& mtx, std::vector<int>& sequence, int id) -> task<void> {
-        co_await mtx.shared();
-        sequence.push_back(id);
-        mtx.unlock_shared();
-    };
-    static const auto main = [](shared_mutex& mtx, std::vector<int>& sequence) -> task<void> {
-        auto s1 = shared_awaiter(mtx, sequence, 1);
-        auto s2 = shared_awaiter(mtx, sequence, 2);
-        auto u1 = awaiter(mtx, sequence, -1);
-        auto u2 = awaiter(mtx, sequence, -2);
-
-        co_await mtx.unique();
-        sequence.push_back(0);
-        s1.launch();
-        s2.launch();
-        u1.launch();
-        u2.launch();
-        mtx.unlock();
-    };
-
-    shared_mutex mtx;
-    std::vector<int> sequence;
-    join(main(mtx, sequence));
-    REQUIRE(sequence == std::vector{ 0, 1, 2, -1, -2 });
-}
-
-
-TEST_CASE("Shared mutex: unique starvation", "[Shared mutex]") {
-    static const auto awaiter = [](shared_mutex& mtx, std::vector<int>& sequence, int id) -> task<void> {
-        co_await mtx.unique();
-        sequence.push_back(id);
-        mtx.unlock();
-    };
-    static const auto shared_awaiter = [](shared_mutex& mtx, std::vector<int>& sequence, int id) -> task<void> {
-        co_await mtx.shared();
-        sequence.push_back(id);
-        mtx.unlock_shared();
-    };
-    static const auto main = [](shared_mutex& mtx, std::vector<int>& sequence) -> task<void> {
-        auto s1 = shared_awaiter(mtx, sequence, 1);
-        auto s2 = shared_awaiter(mtx, sequence, 2);
-        auto s3 = shared_awaiter(mtx, sequence, 3);
-        auto s4 = shared_awaiter(mtx, sequence, 4);
-        auto u1 = awaiter(mtx, sequence, -1);
-
-        co_await mtx.shared();
-        sequence.push_back(0);
-        s1.launch();
-        s2.launch();
-        u1.launch();
-        s3.launch();
-        mtx.unlock_shared();
-        co_await mtx.shared();
-        sequence.push_back(0);
-        s4.launch();
-        mtx.unlock_shared();
-    };
-
-    shared_mutex mtx;
-    std::vector<int> sequence;
-    join(main(mtx, sequence));
-    REQUIRE(sequence == std::vector{ 0, 1, 2, -1, 3, 0, 4 });
+    REQUIRE(!mtx._debug_is_shared_locked());
 }

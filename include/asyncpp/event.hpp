@@ -1,121 +1,204 @@
 #pragma once
 
 #include "container/atomic_collection.hpp"
-#include "interleaving/sequence_point.hpp"
+#include "container/atomic_item.hpp"
 #include "promise.hpp"
 
 #include <cassert>
-#include <iostream>
-#include <memory>
+#include <stdexcept>
 
 
 namespace asyncpp {
 
-namespace impl_event {
-    
-    template <class T>
-    class promise {
-    public:
-        struct awaitable : basic_awaitable<T> {
-            awaitable* m_next = nullptr;
+template <class T>
+class basic_event {
+public:
+    struct awaitable {
+        basic_event* m_owner = nullptr;
+        resumable_promise* m_enclosing = nullptr;
+        awaitable* m_next = nullptr;
 
-            awaitable(promise* owner) noexcept : m_owner(owner) {}
+        bool await_ready() const {
+            assert(m_owner);
+            return m_owner->m_awaiter.closed();
+        }
 
-            bool await_ready() const noexcept {
-                return m_owner->ready();
+        template <std::convertible_to<const resumable_promise&> Promise>
+        bool await_suspend(std::coroutine_handle<Promise> promise) {
+            assert(m_owner);
+            m_enclosing = &promise.promise();
+            const auto status = m_owner->m_awaiter.set(this);
+            if (status != nullptr && !m_owner->m_awaiter.closed(status)) {
+                m_owner->m_awaiter.set(status);
+                throw std::invalid_argument("event already awaited");
             }
-
-            template <std::convertible_to<const resumable_promise&> Promise>
-            bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept {
-                m_enclosing = &enclosing.promise();
-                const bool ready = m_owner->await(this);
-                return !ready;
-            }
-
-            auto await_resume() -> typename task_result<T>::reference {
-                return m_owner->get_result().get_or_throw();
-            }
-
-            void on_ready() noexcept final {
-                m_enclosing->resume();
-            }
-
-        private:
-            resumable_promise* m_enclosing = nullptr;
-            promise* m_owner = nullptr;
-        };
-
-    public:
-        promise() = default;
-        promise(promise&&) = delete;
-        promise(const promise&) = delete;
-        promise& operator=(promise&&) = delete;
-        promise& operator=(const promise&) = delete;
-
-        void set(task_result<T> result) noexcept {
-            m_result = std::move(result);
-            finalize();
+            return !m_owner->m_awaiter.closed(status);
         }
 
-        awaitable await() noexcept {
-            return { this };
+        T await_resume() {
+            assert(m_owner);
+            assert(m_owner->m_result.has_value());
+            return static_cast<T>(m_owner->m_result.move_or_throw());
         }
-
-        bool ready() const noexcept {
-            return INTERLEAVED(m_awaiters.closed());
-        }
-
-    private:
-        bool await(awaitable* awaiter) noexcept {
-            const auto previous = INTERLEAVED(m_awaiters.push(awaiter));
-            return m_awaiters.closed(previous);
-        }
-
-        void finalize() noexcept {
-            auto awaiter = INTERLEAVED(m_awaiters.close());
-            assert(!m_awaiters.closed(awaiter) && "cannot set event twice");
-            while (awaiter != nullptr) {
-                const auto next = awaiter->m_next;
-                awaiter->on_ready();
-                awaiter = next;
-            }
-        }
-
-        auto& get_result() noexcept {
-            return this->m_result;
-        }
-
-    private:
-        task_result<T> m_result;
-        atomic_collection<awaitable, &awaitable::m_next> m_awaiters;
     };
 
-} // namespace impl_event
-
-
-template <class T>
-class event {
 public:
-    event() = default;
-    event(const event&) = delete;
-    event(event&&) = delete;
-    event& operator=(const event&) = delete;
-    event& operator=(event&&) = delete;
-
-    auto operator co_await() noexcept {
-        return m_promise.await();
-    }
-
-    void set_value(T value) {
-        m_promise.set(std::move(value));
+    basic_event() = default;
+    basic_event(basic_event&&) = delete;
+    basic_event& operator=(basic_event&&) = delete;
+    ~basic_event() {
+        assert(m_awaiter.empty());
     }
 
     void set_exception(std::exception_ptr ex) {
-        m_promise.set(std::move(ex));
+        set(task_result<T>(std::move(ex)));
     }
 
-private:
-    impl_event::promise<T> m_promise;
+    void set(task_result<T> result) {
+        if (m_result.has_value()) {
+            throw std::invalid_argument("event already set");
+        }
+        m_result = std::move(result);
+        resume_one();
+    }
+
+    bool ready() const noexcept {
+        return m_awaiter.closed();
+    }
+
+    awaitable operator co_await() {
+        return awaitable{ this };
+    }
+
+    task_result<T>& _debug_get_result() {
+        return m_result;
+    }
+
+protected:
+    void resume_one() {
+        auto item = m_awaiter.close();
+        assert(!m_awaiter.closed(item));
+        if (item != nullptr) {
+            assert(item->m_enclosing != nullptr);
+            item->m_enclosing->resume();
+        }
+    }
+
+protected:
+    atomic_item<awaitable> m_awaiter;
+    task_result<T> m_result;
+};
+
+
+template <class T>
+class event : public basic_event<T> {
+public:
+    void set_value(T value) {
+        this->set(task_result<T>(std::forward<T>(value)));
+    }
+};
+
+
+template <>
+class event<void> : public basic_event<void> {
+public:
+    void set_value() {
+        set(task_result<void>(nullptr));
+    }
+};
+
+
+template <class T>
+class basic_broadcast_event {
+public:
+    struct awaitable {
+        basic_broadcast_event* m_owner = nullptr;
+        resumable_promise* m_enclosing = nullptr;
+        awaitable* m_next = nullptr;
+
+        bool await_ready() const {
+            assert(m_owner);
+            return m_owner->m_awaiters.closed();
+        }
+
+        template <std::convertible_to<const resumable_promise&> Promise>
+        bool await_suspend(std::coroutine_handle<Promise> promise) {
+            assert(m_owner);
+            m_enclosing = &promise.promise();
+            const auto status = m_owner->m_awaiters.push(this);
+            return !m_owner->m_awaiters.closed(status);
+        }
+
+        auto await_resume() -> std::conditional_t<std::is_void_v<T>, void, std::add_lvalue_reference_t<T>> {
+            assert(m_owner);
+            assert(m_owner->m_result.has_value());
+            return m_owner->m_result.get_or_throw();
+        }
+    };
+
+public:
+    basic_broadcast_event() = default;
+    basic_broadcast_event(basic_broadcast_event&&) = delete;
+    basic_broadcast_event& operator=(basic_broadcast_event&&) = delete;
+    ~basic_broadcast_event() {
+        assert(m_awaiters.empty());
+    }
+
+    void set_exception(std::exception_ptr ex) {
+        set(task_result<T>(std::move(ex)));
+    }
+
+    void set(task_result<T> result) {
+        if (m_result.has_value()) {
+            throw std::invalid_argument("event already set");
+        }
+        m_result = std::move(result);
+        resume_all();
+    }
+
+    bool ready() const noexcept {
+        return m_awaiters.closed();
+    }
+
+    awaitable operator co_await() {
+        return awaitable{ this };
+    }
+
+    task_result<T>& _debug_get_result() {
+        return m_result;
+    }
+
+protected:
+    void resume_all() {
+        auto first = m_awaiters.close();
+        while (first != nullptr) {
+            assert(first->m_enclosing != nullptr);
+            first->m_enclosing->resume();
+            first = first->m_next;
+        }
+    }
+
+protected:
+    atomic_collection<awaitable, &awaitable::m_next> m_awaiters;
+    task_result<T> m_result;
+};
+
+
+template <class T>
+class broadcast_event : public basic_broadcast_event<T> {
+public:
+    void set_value(T value) {
+        this->set(task_result<T>(std::forward<T>(value)));
+    }
+};
+
+
+template <>
+class broadcast_event<void> : public basic_broadcast_event<void> {
+public:
+    void set_value() {
+        set(task_result<void>(nullptr));
+    }
 };
 
 } // namespace asyncpp

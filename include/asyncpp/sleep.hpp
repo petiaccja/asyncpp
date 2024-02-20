@@ -1,6 +1,5 @@
 #pragma once
 
-#include "awaitable.hpp"
 #include "promise.hpp"
 
 #include <chrono>
@@ -14,21 +13,20 @@ namespace impl_sleep {
 
     using clock_type = std::chrono::steady_clock;
 
-    struct awaitable : basic_awaitable<void> {
+    struct awaitable {
+        resumable_promise* m_enclosing = nullptr;
+
         explicit awaitable(clock_type::time_point time) noexcept;
 
         bool await_ready() const noexcept;
         template <std::convertible_to<const resumable_promise&> Promise>
         void await_suspend(std::coroutine_handle<Promise> enclosing) noexcept;
         void await_resume() const noexcept;
-        void on_ready() noexcept override;
         auto get_time() const noexcept -> clock_type::time_point;
 
     private:
         void enqueue() noexcept;
-
         clock_type::time_point m_time;
-        resumable_promise* m_enclosing = nullptr;
     };
 
     template <std::convertible_to<const resumable_promise&> Promise>

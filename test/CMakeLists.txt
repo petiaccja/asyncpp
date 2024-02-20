@@ -3,20 +3,21 @@ add_executable(test)
 target_sources(test
 	PRIVATE
 		container/test_atomic_collection.cpp
-		container/test_atomic_queue.cpp
+		container/test_atomic_item.cpp		
 		container/test_atomic_stack.cpp
-		interleaving/test_runner.cpp
+		container/test_atomic_deque.cpp
+		memory/test_rc_ptr.cpp
 		main.cpp		
 		test_generator.cpp
 		test_join.cpp
 		test_mutex.cpp
-		test_shared_mutex.cpp
-		test_shared_task.cpp
+		test_shared_mutex.cpp		
 		test_stream.cpp
 		test_task.cpp
 		test_thread_pool.cpp
 		test_event.cpp
 		test_sleep.cpp
+		testing/test_interleaver.cpp
 )
 
 

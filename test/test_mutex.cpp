@@ -1,139 +1,154 @@
-#include <asyncpp/interleaving/runner.hpp>
-#include <asyncpp/join.hpp>
+#include "monitor_task.hpp"
+
 #include <asyncpp/mutex.hpp>
-#include <asyncpp/task.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 using namespace asyncpp;
 
 
-TEST_CASE("Mutex: try lock", "[Mutex]") {
-    static const auto coro = [](mutex& mtx) -> task<void> {
-        REQUIRE(mtx.try_lock());
-        REQUIRE(!mtx.try_lock());
-        mtx.unlock();
-        co_return;
-    };
+struct [[nodiscard]] scope_clear {
+    ~scope_clear() {
+        mtx._debug_clear();
+    }
+    mutex& mtx;
+};
 
-    mutex mtx;
-    join(coro(mtx));
+
+static monitor_task lock_exclusively(mutex& mtx) {
+    co_await mtx.exclusive();
 }
 
 
-TEST_CASE("Mutex: lock", "[Mutex]") {
-    static const auto coro = [](mutex& mtx) -> task<void> {
-        co_await mtx;
-        REQUIRE(!mtx.try_lock());
-        mtx.unlock();
-    };
+static monitor_task lock(unique_lock<mutex>& lk) {
+    co_await lk;
+}
 
+
+TEST_CASE("Mutex: try lock", "[Mutex]") {
     mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    REQUIRE(mtx.try_lock());
+    REQUIRE(mtx._debug_is_locked());
+}
+
+
+TEST_CASE("Mutex: lock direct immediate", "[Mutex]") {
+    mutex mtx;
+    scope_clear guard(mtx);
+
+    auto monitor = lock_exclusively(mtx);
+    REQUIRE(monitor.get_counters().done);
+    REQUIRE(mtx._debug_is_locked());
+}
+
+
+TEST_CASE("Mutex: lock spurious immediate", "[Mutex]") {
+    mutex mtx;
+    scope_clear guard(mtx);
+
+    auto monitor = []() -> monitor_task { co_return; }();
+    auto awaiter = mtx.exclusive();
+    REQUIRE(false == awaiter.await_suspend(monitor.handle()));
+    REQUIRE(mtx._debug_is_locked());
+}
+
+
+TEST_CASE("Mutex: sequencial locking attempts", "[Mutex]") {
+    mutex mtx;
+    scope_clear guard(mtx);
+
+    REQUIRE(mtx.try_lock());
+    REQUIRE(!mtx.try_lock());
 }
 
 
 TEST_CASE("Mutex: unlock", "[Mutex]") {
-    static const auto coro = [](mutex& mtx) -> task<void> {
-        co_await mtx;
-        mtx.unlock();
-        REQUIRE(mtx.try_lock());
-        mtx.unlock();
-    };
-
     mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    SECTION("exclusive -> free") {
+        mtx.try_lock();
+        mtx.unlock();
+        REQUIRE(!mtx._debug_is_locked());
+    }
+    SECTION("locked -> exclusive") {
+        mtx.try_lock();
+
+        auto monitor1 = lock_exclusively(mtx);
+        auto monitor2 = lock_exclusively(mtx);
+
+        REQUIRE(!monitor1.get_counters().done);
+        REQUIRE(!monitor2.get_counters().done);
+
+        mtx.unlock();
+
+        REQUIRE(monitor1.get_counters().done);
+        REQUIRE(!monitor2.get_counters().done);
+    }
 }
 
 
-TEST_CASE("Mutex: unique lock try", "[Mutex]") {
-    static const auto coro = [](mutex& mtx) -> task<void> {
-        unique_lock lk(mtx);
-        REQUIRE(!lk.owns_lock());
-        REQUIRE(lk.try_lock());
-        REQUIRE(lk.owns_lock());
-        co_return;
-    };
-
+TEST_CASE("Mutex: unique lock try_lock", "[Mutex]") {
     mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    unique_lock lk(mtx);
+    REQUIRE(!lk.owns_lock());
+
+    lk.try_lock();
+    REQUIRE(lk.owns_lock());
+    REQUIRE(mtx._debug_is_locked());
 }
 
 
 TEST_CASE("Mutex: unique lock await", "[Mutex]") {
-    static const auto coro = [](mutex& mtx) -> task<void> {
-        unique_lock lk(mtx);
-        REQUIRE(!lk.owns_lock());
-        co_await lk;
-        REQUIRE(lk.owns_lock());
-        co_return;
-    };
-
     mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    unique_lock lk(mtx);
+    auto monitor = lock(lk);
+    REQUIRE(monitor.get_counters().done);
+    REQUIRE(lk.owns_lock());
+    REQUIRE(mtx._debug_is_locked());
 }
 
 
 TEST_CASE("Mutex: unique lock start locked", "[Mutex]") {
-    static const auto coro = [](mutex& mtx) -> task<void> {
-        unique_lock lk(co_await mtx);
-        REQUIRE(lk.owns_lock());
-        co_return;
-    };
-
     mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    auto monitor = [](mutex& mtx) -> monitor_task {
+        unique_lock lk(co_await mtx.exclusive());
+        REQUIRE(lk.owns_lock());
+        REQUIRE(mtx._debug_is_locked());
+    }(mtx);
+
+    REQUIRE(monitor.get_counters().done);
 }
 
 
 TEST_CASE("Mutex: unique lock unlock", "[Mutex]") {
-    static const auto coro = [](mutex& mtx) -> task<void> {
-        unique_lock lk(co_await mtx);
-        lk.unlock();
-        REQUIRE(!lk.owns_lock());
-        co_return;
-    };
-
     mutex mtx;
-    join(coro(mtx));
+    scope_clear guard(mtx);
+
+    unique_lock lk(mtx);
+    lk.try_lock();
+    lk.unlock();
+    REQUIRE(!lk.owns_lock());
+    REQUIRE(!mtx._debug_is_locked());
 }
 
 
-TEST_CASE("Mutex: unique lock destroy", "[Shared mutex]") {
-    static const auto coro = [](mutex& mtx) -> task<void> {
-        {
-            unique_lock lk(co_await mtx);
-            REQUIRE(lk.owns_lock());
-        }
-        REQUIRE(mtx.try_lock());
-        mtx.unlock();
-        co_return;
-    };
-
+TEST_CASE("Mutex: unique lock destructor", "[Mutex]") {
     mutex mtx;
-    join(coro(mtx));
-}
+    scope_clear guard(mtx);
 
+    {
+        unique_lock lk(mtx);
+        lk.try_lock();
+    }
 
-TEST_CASE("Mutex: resume awaiting", "[Mutex]") {
-    static const auto awaiter = [](mutex& mtx, std::vector<int>& sequence, int id) -> task<void> {
-        co_await mtx;
-        sequence.push_back(id);
-        mtx.unlock();
-    };
-    static const auto main = [](mutex& mtx, std::vector<int>& sequence) -> task<void> {
-        auto t1 = awaiter(mtx, sequence, 1);
-        auto t2 = awaiter(mtx, sequence, 2);
-
-        co_await mtx;
-        sequence.push_back(0);
-        t1.launch();
-        t2.launch();
-        mtx.unlock();
-    };
-
-    mutex mtx;
-    std::vector<int> sequence;
-    join(main(mtx, sequence));
-    REQUIRE(sequence == std::vector{ 0, 1, 2 });
+    REQUIRE(!mtx._debug_is_locked());
 }

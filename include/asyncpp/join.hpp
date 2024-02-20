@@ -1,8 +1,8 @@
 #pragma once
 
 #include "concepts.hpp"
-#include "interleaving/sequence_point.hpp"
 #include "promise.hpp"
+#include "testing/suspension_point.hpp"
 
 #include <coroutine>
 #include <exception>
