@@ -34,12 +34,23 @@ TEST_CASE("Mutex: try lock", "[Mutex]") {
 }
 
 
-TEST_CASE("Mutex: lock", "[Mutex]") {
+TEST_CASE("Mutex: lock direct immediate", "[Mutex]") {
     mutex mtx;
     scope_clear guard(mtx);
 
     auto monitor = lock_exclusively(mtx);
     REQUIRE(monitor.get_counters().done);
+    REQUIRE(mtx._debug_is_locked());
+}
+
+
+TEST_CASE("Mutex: lock spurious immediate", "[Mutex]") {
+    mutex mtx;
+    scope_clear guard(mtx);
+
+    auto monitor = []() -> monitor_task { co_return; }();
+    auto awaiter = mtx.exclusive();
+    REQUIRE(false == awaiter.await_suspend(monitor.handle()));
     REQUIRE(mtx._debug_is_locked());
 }
 

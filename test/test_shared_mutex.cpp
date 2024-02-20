@@ -51,7 +51,7 @@ TEST_CASE("Shared mutex: try lock", "[Shared mutex]") {
 }
 
 
-TEST_CASE("Shared mutex: lock", "[Shared mutex]") {
+TEST_CASE("Shared mutex: lock direct immediate", "[Shared mutex]") {
     shared_mutex mtx;
     scope_clear guard(mtx);
 
@@ -63,6 +63,32 @@ TEST_CASE("Shared mutex: lock", "[Shared mutex]") {
     SECTION("shared") {
         auto monitor = lock_shared(mtx);
         REQUIRE(monitor.get_counters().done);
+        REQUIRE(mtx._debug_is_shared_locked());
+    }
+}
+
+
+TEST_CASE("Shared mutex: lock spurious immediate", "[Shared mutex]") {
+    shared_mutex mtx;
+    scope_clear guard(mtx);
+
+    SECTION("exclusive") {
+        auto awaiter = mtx.exclusive();
+        auto enclosing = []() -> monitor_task { co_return; }();
+        REQUIRE(false == awaiter.await_suspend(enclosing.handle()));
+        REQUIRE(mtx._debug_is_exclusive_locked());
+    }
+    SECTION("shared") {
+        auto awaiter = mtx.shared();
+        auto enclosing = []() -> monitor_task { co_return; }();
+        REQUIRE(false == awaiter.await_suspend(enclosing.handle()));
+        REQUIRE(mtx._debug_is_shared_locked());
+    }
+    SECTION("shared - shared") {
+        mtx.try_lock_shared();
+        auto awaiter = mtx.shared();
+        auto enclosing = []() -> monitor_task { co_return; }();
+        REQUIRE(false == awaiter.await_suspend(enclosing.handle()));
         REQUIRE(mtx._debug_is_shared_locked());
     }
 }

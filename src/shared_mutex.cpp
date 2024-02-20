@@ -93,9 +93,9 @@ bool shared_mutex::add_awaiting(basic_awaitable* waiting) {
         }
         // We've just acquired the shared lock.
         if (previous == &m_shared_sentinel) {
-            m_queue.push_back(&m_shared_sentinel);
             m_queue.pop_front(); // Pop old sentinel.
             m_queue.pop_front(); // Pop just added awaitable.
+            m_queue.push_back(&m_shared_sentinel);
             ++m_shared_count;
             return true;
         }
