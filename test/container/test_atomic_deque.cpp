@@ -78,6 +78,8 @@ TEST_CASE("Atomic deque - pop_front", "[Atomic deque]") {
     REQUIRE(c.pop_front() == &e1);
     REQUIRE(c.front() == nullptr);
     REQUIRE(c.back() == nullptr);
+
+    REQUIRE(c.pop_front() == nullptr);
 }
 
 
@@ -100,4 +102,6 @@ TEST_CASE("Atomic deque - pop_back", "[Atomic deque]") {
     REQUIRE(c.pop_back() == &e1);
     REQUIRE(c.front() == nullptr);
     REQUIRE(c.back() == nullptr);
+
+    REQUIRE(c.pop_back() == nullptr);
 }
