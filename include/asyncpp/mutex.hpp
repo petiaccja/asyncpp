@@ -1,34 +1,31 @@
 #pragma once
 
-#include "container/atomic_queue.hpp"
+#include "container/atomic_deque.hpp"
 #include "lock.hpp"
 #include "promise.hpp"
 #include "threading/spinlock.hpp"
 
 #include <concepts>
-#include <optional>
 
 
 namespace asyncpp {
 
 class mutex {
     struct awaitable {
+        mutex* m_owner = nullptr;
+        resumable_promise* m_enclosing = nullptr;
         awaitable* m_next = nullptr;
         awaitable* m_prev = nullptr;
 
-        awaitable(mutex* mtx) : m_mtx(mtx) {}
-        bool await_ready() noexcept;
+        bool await_ready() const noexcept;
+
         template <std::convertible_to<const resumable_promise&> Promise>
         bool await_suspend(std::coroutine_handle<Promise> enclosing) noexcept;
-        locked_mutex<mutex> await_resume() noexcept;
-        void on_ready() noexcept;
 
-    private:
-        mutex* m_mtx;
-        resumable_promise* m_enclosing = nullptr;
+        locked_mutex<mutex> await_resume() noexcept;
     };
 
-    bool lock_enqueue(awaitable* waiting);
+    bool add_awaiting(awaitable* waiting);
 
 public:
     mutex() = default;
@@ -44,16 +41,20 @@ public:
     void unlock();
 
 private:
-    atomic_queue<awaitable, &awaitable::m_next, &awaitable::m_prev> m_queue;
-    bool m_locked = false;
+    // Front: the next awaiting coroutine to acquire, back: last coroutine to acquire.
+    deque<awaitable, &awaitable::m_prev, &awaitable::m_next> m_queue;
+    // Used to protect the queue data structure.
     spinlock m_spinlock;
+    // At the front, signifies mutex is locked.
+    awaitable m_sentinel;
 };
 
 
 template <std::convertible_to<const resumable_promise&> Promise>
 bool mutex::awaitable::await_suspend(std::coroutine_handle<Promise> enclosing) noexcept {
+    assert(m_owner);
     m_enclosing = &enclosing.promise();
-    const bool ready = m_mtx->lock_enqueue(this);
+    const bool ready = m_owner->add_awaiting(this);
     return !ready;
 }
 

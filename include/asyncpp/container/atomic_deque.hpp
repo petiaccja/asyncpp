@@ -72,6 +72,10 @@ public:
         return m_back;
     }
 
+    bool empty() const noexcept {
+        return m_back == nullptr;
+    }
+
 private:
     Element* m_front = nullptr;
     Element* m_back = nullptr;
@@ -109,6 +113,11 @@ public:
     Element* back() const noexcept {
         std::lock_guard lk(m_mutex);
         return m_container.back();
+    }
+
+    bool empty() const noexcept {
+        std::lock_guard lk(m_mutex);
+        return m_container.empty();
     }
 
 private:
