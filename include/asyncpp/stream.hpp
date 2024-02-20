@@ -69,7 +69,6 @@ namespace impl_stream {
                 auto& owner = handle.promise();
                 assert(owner.m_event);
                 owner.m_event->set(std::move(owner.m_result));
-                owner.m_event.reset();
             }
 
             constexpr void await_resume() const noexcept {}
@@ -114,6 +113,10 @@ namespace impl_stream {
 
         auto await() noexcept;
 
+        bool has_event() const noexcept {
+            return !!m_event;
+        }
+
     private:
         std::optional<event<std::optional<wrapper_type<T>>>> m_event;
         task_result<std::optional<wrapper_type<T>>> m_result;
@@ -130,15 +133,18 @@ namespace impl_stream {
         awaitable(base base, rc_ptr<promise<T>> awaited) : m_base(base), m_awaited(awaited) {}
 
         bool await_ready() noexcept {
+            assert(m_awaited->has_event());
             return m_base.await_ready();
         }
 
         template <std::convertible_to<const resumable_promise&> Promise>
         bool await_suspend(std::coroutine_handle<Promise> enclosing) {
+            assert(m_awaited->has_event());
             return m_base.await_suspend(enclosing);
         }
 
         item<T> await_resume() {
+            assert(m_awaited->has_event());
             return { m_base.await_resume() };
         }
     };
@@ -146,7 +152,6 @@ namespace impl_stream {
 
     template <class T>
     auto promise<T>::await() noexcept {
-        assert(!m_event);
         m_event.emplace();
         auto aw = awaitable<T>(m_event->operator co_await(), rc_ptr(this));
         resume();
