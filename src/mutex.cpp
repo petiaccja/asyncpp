@@ -35,13 +35,13 @@ bool mutex::try_lock() noexcept {
 }
 
 
-mutex::awaitable mutex::unique() noexcept {
+mutex::awaitable mutex::exclusive() noexcept {
     return { this };
 }
 
 
 mutex::awaitable mutex::operator co_await() noexcept {
-    return unique();
+    return exclusive();
 }
 
 

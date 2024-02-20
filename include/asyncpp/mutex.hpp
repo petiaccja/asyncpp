@@ -36,7 +36,7 @@ public:
     ~mutex();
 
     bool try_lock() noexcept;
-    awaitable unique() noexcept;
+    awaitable exclusive() noexcept;
     awaitable operator co_await() noexcept;
     void unlock();
 
