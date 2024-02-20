@@ -131,7 +131,8 @@ void shared_mutex::continue_waiting(std::unique_lock<spinlock>& lk) {
 
 void shared_mutex::unlock() {
     std::unique_lock lk(m_spinlock);
-    assert(m_queue.pop_front() == &m_exclusive_sentinel);
+    assert(m_queue.front() == &m_exclusive_sentinel);
+    m_queue.pop_front();
     continue_waiting(lk);
 }
 
