@@ -1,8 +1,6 @@
 #include "monitor_task.hpp"
 
-#include <asyncpp/join.hpp>
 #include <asyncpp/shared_mutex.hpp>
-#include <asyncpp/task.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -209,7 +207,6 @@ TEST_CASE("Shared mutex: unique lock destructor", "[Shared mutex]") {
 
     REQUIRE(!mtx._debug_is_exclusive_locked());
 }
-
 
 
 TEST_CASE("Shared mutex: shared lock try_lock", "[Shared mutex]") {

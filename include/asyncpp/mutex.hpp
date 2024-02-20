@@ -40,6 +40,9 @@ public:
     awaitable operator co_await() noexcept;
     void unlock();
 
+    void _debug_clear() noexcept;
+    bool _debug_is_locked() noexcept;
+
 private:
     // Front: the next awaiting coroutine to acquire, back: last coroutine to acquire.
     deque<awaitable, &awaitable::m_prev, &awaitable::m_next> m_queue;

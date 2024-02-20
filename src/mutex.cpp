@@ -73,4 +73,15 @@ void mutex::unlock() {
     }
 }
 
+
+void mutex::_debug_clear() noexcept {
+    while (m_queue.pop_front()) {
+    }
+}
+
+
+bool mutex::_debug_is_locked() noexcept {
+    return m_queue.front() == &m_sentinel;
+}
+
 } // namespace asyncpp
