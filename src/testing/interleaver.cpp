@@ -174,7 +174,7 @@ std::vector<thread_state> stabilize(std::span<std::unique_ptr<thread>> threads) 
     do {
         const auto elapsed = std::chrono::high_resolution_clock::now() - start;
         if (elapsed > 200ms) {
-            throw std::logic_error("deadlock");
+            throw std::logic_error("deadlock - still running");
         }
         states = get_states(threads);
     } while (!is_stable(states));
@@ -182,7 +182,7 @@ std::vector<thread_state> stabilize(std::span<std::unique_ptr<thread>> threads) 
     while (!is_unblocked(states)) {
         const auto elapsed = std::chrono::high_resolution_clock::now() - start;
         if (elapsed > 200ms) {
-            throw std::logic_error("deadlock");
+            throw std::logic_error("deadlock - all blocked");
         }
         states = get_states(threads);
     }
@@ -307,6 +307,8 @@ path run_next_interleaving(tree& tree, std::span<std::unique_ptr<thread>> swarm)
             current_node = &tree.next(transition_node, resumed);
         }
         catch (std::exception&) {
+            const auto locked_states = get_states(swarm);
+            path.steps.push_back({ swarm_state(locked_states), -1 });
             std::cerr << path.dump() << std::endl;
             std::terminate();
         }
