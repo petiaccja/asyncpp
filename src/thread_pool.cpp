@@ -10,7 +10,7 @@ thread_pool::thread_pool(size_t num_threads)
     for (auto& w : m_workers) {
         w.thread = std::jthread([this, &w] {
             local = &w;
-            execute(w, m_global_worklist, m_global_notification, m_terminate, m_workers);
+            execute(w, m_global_worklist, m_global_notification, m_global_mutex, m_terminate, m_workers);
         });
     }
 }
@@ -23,13 +23,14 @@ thread_pool::~thread_pool() {
 
 
 void thread_pool::schedule(schedulable_promise& promise) {
-    schedule(promise, m_global_worklist, m_global_notification, local);
+    schedule(promise, m_global_worklist, m_global_notification, m_global_mutex, local);
 }
 
 
 void thread_pool::schedule(schedulable_promise& item,
                            atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
                            std::condition_variable& global_notification,
+                           std::mutex& global_mutex,
                            worker* local) {
     if (local) {
         const auto prev_item = INTERLEAVED(local->worklist.push(&item));
@@ -38,6 +39,8 @@ void thread_pool::schedule(schedulable_promise& item,
         }
     }
     else {
+        std::unique_lock lk(global_mutex, std::defer_lock);
+        INTERLEAVED_ACQUIRE(lk.lock());
         INTERLEAVED(global_worklist.push(&item));
         INTERLEAVED(global_notification.notify_one());
     }
@@ -57,16 +60,17 @@ schedulable_promise* thread_pool::steal(std::span<worker> workers) {
 void thread_pool::execute(worker& local,
                           atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
                           std::condition_variable& global_notification,
+                          std::mutex& global_mutex,
                           std::atomic_flag& terminate,
                           std::span<worker> workers) {
-    std::mutex mtx;
     do {
         const auto item = INTERLEAVED(local.worklist.pop());
         if (item != nullptr) {
             item->handle().resume();
         }
         else {
-            std::unique_lock lk(mtx);
+            std::unique_lock lk(global_mutex, std::defer_lock);
+            INTERLEAVED_ACQUIRE(lk.lock());
             global_notification.wait(lk, [&] {
                 const auto global = INTERLEAVED(global_worklist.pop());
                 if (global) {

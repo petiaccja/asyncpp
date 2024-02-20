@@ -28,18 +28,19 @@ struct test_promise : schedulable_promise {
 
 TEST_CASE("Thread pool: schedule worklist selection", "[Thread pool]") {
     std::condition_variable global_notification;
+    std::mutex global_mutex;
     atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> global_worklist;
     std::vector<thread_pool::worker> workers(1);
 
     test_promise promise;
 
     SECTION("has local worker") {
-        thread_pool::schedule(promise, global_worklist, global_notification, &workers[0]);
+        thread_pool::schedule(promise, global_worklist, global_notification, global_mutex, &workers[0]);
         REQUIRE(workers[0].worklist.pop() == &promise);
         REQUIRE(global_worklist.empty());
     }
     SECTION("no local worker") {
-        thread_pool::schedule(promise, global_worklist, global_notification, &workers[0]);
+        thread_pool::schedule(promise, global_worklist, global_notification, global_mutex, &workers[0]);
         REQUIRE(workers[0].worklist.pop() == &promise);
     }
 }
@@ -66,6 +67,7 @@ TEST_CASE("Thread pool: ensure execution", "[Thread pool]") {
 
     struct scenario : testing::validated_scenario {
         std::condition_variable global_notification;
+        std::mutex global_mutex;
         atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> global_worklist;
         std::vector<thread_pool::worker> workers;
         std::atomic_flag terminate;
@@ -74,13 +76,13 @@ TEST_CASE("Thread pool: ensure execution", "[Thread pool]") {
         scenario() : workers(1) {}
 
         void schedule() {
-            thread_pool::schedule(promise, global_worklist, global_notification);
+            thread_pool::schedule(promise, global_worklist, global_notification, global_mutex);
             INTERLEAVED(terminate.test_and_set());
             global_notification.notify_all();
         }
 
         void execute() {
-            thread_pool::execute(workers[0], global_worklist, global_notification, terminate, std::span(workers));
+            thread_pool::execute(workers[0], global_worklist, global_notification, global_mutex, terminate, std::span(workers));
         }
 
         void validate(const testing::path& p) override {

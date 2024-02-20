@@ -34,6 +34,7 @@ public:
     static void schedule(schedulable_promise& item,
                          atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
                          std::condition_variable& global_notification,
+                         std::mutex& global_mutex,
                          worker* local = nullptr);
 
     static schedulable_promise* steal(std::span<worker> workers);
@@ -41,11 +42,13 @@ public:
     static void execute(worker& local,
                         atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
                         std::condition_variable& global_notification,
+                        std::mutex& global_mutex,
                         std::atomic_flag& terminate,
                         std::span<worker> workers);
 
 private:
     std::condition_variable m_global_notification;
+    std::mutex m_global_mutex;
     atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> m_global_worklist;
     std::vector<worker> m_workers;
     std::atomic_flag m_terminate;
