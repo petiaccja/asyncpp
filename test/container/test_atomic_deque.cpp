@@ -19,6 +19,7 @@ TEST_CASE("Atomic deque - empty", "[Atomic deque]") {
     deque_t c;
     REQUIRE(c.front() == nullptr);
     REQUIRE(c.back() == nullptr);
+    REQUIRE(c.empty());
 }
 
 
