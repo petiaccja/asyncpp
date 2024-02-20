@@ -18,6 +18,7 @@ target_sources(test
 		test_event.cpp
 		test_sleep.cpp
 		testing/test_interleaver.cpp
+		container/test_atomic_deque.cpp
 )
 
 
