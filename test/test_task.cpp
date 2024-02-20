@@ -160,3 +160,17 @@ TEMPLATE_TEST_CASE("Task: co_await void", "[Task]", task<void>, shared_task<void
     auto task = enclosing();
     join(task);
 }
+
+
+TEMPLATE_TEST_CASE("Task: co_await exception", "[Task]", task<void>, shared_task<void>) {
+    static int value = 42;
+    static const auto coro = []() -> TestType {
+        throw std::runtime_error("test");
+        co_return;
+    };
+    static const auto enclosing = []() -> TestType {
+        REQUIRE_THROWS_AS(co_await coro(), std::runtime_error);
+    };
+    auto task = enclosing();
+    join(task);
+}

@@ -70,6 +70,17 @@ TEST_CASE("Stream: data types", "[Stream]") {
         }();
         REQUIRE(r.get_counters().done);
     }
+    SECTION("exception") {
+        static const auto coro = []() -> stream<int> {
+            throw std::runtime_error("test");
+            co_return;
+        };
+        auto r = []() -> monitor_task {
+            auto s = coro();
+            REQUIRE_THROWS_AS(co_await s, std::runtime_error);
+        }();
+        REQUIRE(r.get_counters().done);
+    }
 }
 
 
