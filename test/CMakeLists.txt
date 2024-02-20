@@ -3,9 +3,9 @@ add_executable(test)
 target_sources(test
 	PRIVATE
 		container/test_atomic_collection.cpp
-		container/test_atomic_item.cpp
-		container/test_atomic_queue.cpp
+		container/test_atomic_item.cpp		
 		container/test_atomic_stack.cpp
+		container/test_atomic_deque.cpp
 		memory/test_rc_ptr.cpp
 		main.cpp		
 		test_generator.cpp
@@ -18,7 +18,6 @@ target_sources(test
 		test_event.cpp
 		test_sleep.cpp
 		testing/test_interleaver.cpp
-		container/test_atomic_deque.cpp
 )
 
 
