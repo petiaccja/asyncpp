@@ -15,7 +15,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
         build_profile: [clang20d, clang20r, gcc20d, gcc20r, msvc20d, msvc20r]
         include:
           - build_profile: clang20d
