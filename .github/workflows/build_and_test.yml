@@ -51,7 +51,6 @@ jobs:
     - run: pip install conan
 
     - name: Install GCC
-      shell: bash
       if: ${{ matrix.os == 'ubuntu-latest' }}
       run: |
         sudo add-apt-repository ppa:ubuntu-toolchain-r/test
@@ -72,7 +71,6 @@ jobs:
       run: cmake -E make_directory ${{github.workspace}}/build
 
     - name: Configure CMake
-      shell: bash
       env:
         PR: "${{github.workspace}}/.github/build_profiles/${{matrix.build_profile}}"
       run: |
@@ -82,10 +80,8 @@ jobs:
         cmake -S "${{github.workspace}}" --preset conan-${{ matrix.conan_preset }}
 
     - name: Build
-      shell: bash
       run: |
         cmake --build --preset conan-${{ matrix.conan_preset }}
 
     - name: Test
-      shell: bash
       run: ${{github.workspace}}/build/${{ matrix.conan_preset }}/bin/test
