@@ -27,6 +27,9 @@ jobs:
           version: "17.0"
           directory: ${{ runner.temp }}/llvm
       - run: pip install conan
+
+      - name: Install sonar-scanner and build-wrapper
+        uses: SonarSource/sonarcloud-github-c-cpp@v2
   
       - name: Install GCC
         if: ${{ env.os == 'ubuntu-latest' }}
