@@ -54,7 +54,7 @@ DeriveLineEnding: 'true'
 FixNamespaceComments: true
 IncludeBlocks: Regroup
 IncludeCategories:
-  - Regex:           '(<|")((C|c)atch.*)/'
+  - Regex:           '(<|")(((C|c)atch.*)|((C|c)elero.*))/'
     Priority:        5
   - Regex:           '(<|")((async\+\+).*)/'
     Priority:        2
