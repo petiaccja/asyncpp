@@ -18,6 +18,9 @@ target_sources(test
 		test_event.cpp
 		test_sleep.cpp
 		testing/test_interleaver.cpp
+		helper_schedulers.hpp
+		monitor_task.hpp
+		monitor_allocator.hpp
 )
 
 

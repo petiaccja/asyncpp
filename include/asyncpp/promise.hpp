@@ -1,7 +1,9 @@
 #pragma once
 
-#include <atomic>
+#include <algorithm>
 #include <coroutine>
+#include <cstddef>
+#include <memory>
 #include <optional>
 #include <utility>
 #include <variant>
@@ -102,38 +104,86 @@ struct result_promise<void> {
 };
 
 
-namespace impl {
-
-    class leak_checked_promise {
-        using snapshot_type = std::pair<intptr_t, intptr_t>;
-
-    public:
-#ifdef ASYNCPP_BUILD_TESTS
-        leak_checked_promise() noexcept { num_alive.fetch_add(1, std::memory_order_relaxed); }
-        leak_checked_promise(const leak_checked_promise&) noexcept { num_alive.fetch_add(1, std::memory_order_relaxed); }
-        leak_checked_promise(leak_checked_promise&&) noexcept = delete;
-        leak_checked_promise& operator=(const leak_checked_promise&) noexcept { return *this; }
-        leak_checked_promise& operator=(leak_checked_promise&&) noexcept = delete;
-        ~leak_checked_promise() {
-            num_alive.fetch_sub(1, std::memory_order_relaxed);
-            version.fetch_add(1, std::memory_order_relaxed);
-        }
-#endif
-
-        static snapshot_type snapshot() noexcept {
-            return { num_alive.load(std::memory_order_relaxed), version.load(std::memory_order_relaxed) };
-        }
-
-        static bool check(snapshot_type s) noexcept {
-            const auto current = snapshot();
-            return current.first == s.first && current.second > s.second;
-        }
-
-    private:
-        inline static std::atomic_intptr_t num_alive = 0;
-        inline static std::atomic_intptr_t version = 0;
+template <class Alloc>
+struct allocator_aware_promise {
+private:
+    template <size_t Alignment = alignof(std::max_align_t)>
+    struct aligned_block {
+        alignas(Alignment) std::byte memory[Alignment];
     };
 
-} // namespace impl
+    using dealloc_t = void (*)(void*, size_t);
+
+    static constexpr auto dealloc_offset(size_t size) {
+        constexpr auto dealloc_alignment = alignof(dealloc_t);
+        return (size + dealloc_alignment - 1) / dealloc_alignment * dealloc_alignment;
+    }
+
+    template <class Alloc_, class... Args>
+        requires std::convertible_to<Alloc_, Alloc> || std::is_void_v<Alloc>
+    static void* allocate(size_t size, std::allocator_arg_t, const Alloc_& alloc, Args&&...) {
+        static constexpr auto alloc_alignment = alignof(Alloc_);
+        static constexpr auto promise_alignment = std::max({ alignof(std::max_align_t), alignof(Args)... });
+        static constexpr auto alignment = std::max(alloc_alignment, promise_alignment);
+        using block_t = aligned_block<alignment>;
+        using alloc_t = typename std::allocator_traits<Alloc_>::template rebind_alloc<block_t>;
+        static_assert(alignof(alloc_t) <= alignof(Alloc_));
+
+        static constexpr auto alloc_offset = [](size_t size) {
+            const auto extended_size = dealloc_offset(size) + sizeof(dealloc_t);
+            return (extended_size + alloc_alignment - 1) / alloc_alignment * alloc_alignment;
+        };
+
+        static constexpr auto total_size = [](size_t size) {
+            return alloc_offset(size) + sizeof(alloc_t);
+        };
+
+        static constexpr dealloc_t dealloc = [](void* ptr, size_t size) {
+            auto& alloc = *reinterpret_cast<alloc_t*>(static_cast<std::byte*>(ptr) + alloc_offset(size));
+            auto moved = std::move(alloc);
+            alloc.~alloc_t();
+            const auto num_blocks = (total_size(size) + sizeof(block_t) - 1) / sizeof(block_t);
+            std::allocator_traits<alloc_t>::deallocate(moved, static_cast<block_t*>(ptr), num_blocks);
+        };
+
+        auto rebound_alloc = alloc_t(alloc);
+        const auto num_blocks = (total_size(size) + sizeof(block_t) - 1) / sizeof(block_t);
+        const auto ptr = std::allocator_traits<alloc_t>::allocate(rebound_alloc, num_blocks);
+        const auto dealloc_ptr = reinterpret_cast<dealloc_t*>(reinterpret_cast<std::byte*>(ptr) + dealloc_offset(size));
+        const auto alloc_ptr = reinterpret_cast<alloc_t*>(reinterpret_cast<std::byte*>(ptr) + alloc_offset(size));
+        new (dealloc_ptr) dealloc_t(dealloc);
+        new (alloc_ptr) alloc_t(std::move(rebound_alloc));
+        return ptr;
+    }
+
+public:
+    template <class Alloc_, class... Args>
+        requires std::convertible_to<Alloc_, Alloc> || std::is_void_v<Alloc>
+    void* operator new(size_t size, std::allocator_arg_t, const Alloc_& alloc, Args&&... args) {
+        return allocate(size, std::allocator_arg, alloc, std::forward<Args>(args)...);
+    }
+
+    template <class Self, class Alloc_, class... Args>
+        requires std::convertible_to<Alloc_, Alloc> || std::is_void_v<Alloc>
+    void* operator new(size_t size, Self&, std::allocator_arg_t, const Alloc_& alloc, Args&&... args) {
+        return allocate(size, std::allocator_arg, alloc, std::forward<Args>(args)...);
+    }
+
+    template <class... Args>
+        requires(... && !std::convertible_to<Args, std::allocator_arg_t>)
+    void* operator new(size_t size, Args&&... args) {
+        if constexpr (!std::is_void_v<Alloc>) {
+            return allocate(size, std::allocator_arg, Alloc{}, std::forward<Args>(args)...);
+        }
+        else {
+            return allocate(size, std::allocator_arg, std::allocator<std::byte>{}, std::forward<Args>(args)...);
+        }
+    }
+
+    void operator delete(void* ptr, size_t size) {
+        const auto dealloc_ptr = reinterpret_cast<dealloc_t*>(static_cast<std::byte*>(ptr) + dealloc_offset(size));
+        (*dealloc_ptr)(ptr, size);
+    }
+};
 
 } // namespace asyncpp

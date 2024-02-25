@@ -10,16 +10,16 @@
 namespace asyncpp {
 
 
-template <class T>
+template <class T, class Alloc>
 class generator;
 
 
 namespace impl_generator {
 
-    template <class T>
-    struct promise {
+    template <class T, class Alloc>
+    struct promise : allocator_aware_promise<Alloc> {
         auto get_return_object() noexcept {
-            return generator<T>(this);
+            return generator<T, Alloc>(this);
         }
 
         constexpr auto initial_suspend() const noexcept {
@@ -49,10 +49,10 @@ namespace impl_generator {
         task_result<T> m_result;
     };
 
-    template <class T>
+    template <class T, class Alloc>
     class iterator {
     public:
-        using promise_type = promise<T>;
+        using promise_type = promise<T, Alloc>;
         using value_type = std::remove_reference_t<T>;
         using difference_type = ptrdiff_t;
         using pointer = value_type*;
@@ -100,16 +100,16 @@ namespace impl_generator {
         promise_type* m_promise = nullptr;
     };
 
-    static_assert(std::input_iterator<iterator<int>>);
+    static_assert(std::input_iterator<iterator<int, void>>);
 
 } // namespace impl_generator
 
 
-template <class T>
+template <class T, class Alloc = void>
 class [[nodiscard]] generator {
 public:
-    using promise_type = impl_generator::promise<T>;
-    using iterator = impl_generator::iterator<T>;
+    using promise_type = impl_generator::promise<T, Alloc>;
+    using iterator = impl_generator::iterator<T, Alloc>;
 
     generator(promise_type* promise) : m_promise(promise) {}
     generator() = default;

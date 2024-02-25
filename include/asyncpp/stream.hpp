@@ -14,7 +14,7 @@
 namespace asyncpp {
 
 
-template <class T>
+template <class T, class Alloc>
 class stream;
 
 
@@ -60,8 +60,8 @@ namespace impl_stream {
     };
 
 
-    template <class T>
-    struct promise : resumable_promise, schedulable_promise, impl::leak_checked_promise, rc_from_this {
+    template <class T, class Alloc>
+    struct promise : resumable_promise, schedulable_promise, rc_from_this, allocator_aware_promise<Alloc> {
         struct yield_awaitable {
             constexpr bool await_ready() const noexcept { return false; }
 
@@ -76,7 +76,7 @@ namespace impl_stream {
         };
 
         auto get_return_object() noexcept {
-            return stream<T>(rc_ptr(this));
+            return stream<T, Alloc>(rc_ptr(this));
         }
 
         constexpr std::suspend_always initial_suspend() const noexcept {
@@ -124,14 +124,14 @@ namespace impl_stream {
     };
 
 
-    template <class T>
+    template <class T, class Alloc>
     struct awaitable {
         using base = typename event<std::optional<wrapper_type<T>>>::awaitable;
 
         base m_base;
-        rc_ptr<promise<T>> m_awaited = nullptr;
+        rc_ptr<promise<T, Alloc>> m_awaited = nullptr;
 
-        awaitable(base base, rc_ptr<promise<T>> awaited) : m_base(base), m_awaited(awaited) {}
+        awaitable(base base, rc_ptr<promise<T, Alloc>> awaited) : m_base(base), m_awaited(awaited) {}
 
         bool await_ready() noexcept {
             assert(m_awaited->has_event());
@@ -151,10 +151,10 @@ namespace impl_stream {
     };
 
 
-    template <class T>
-    auto promise<T>::await() noexcept {
+    template <class T, class Alloc>
+    auto promise<T, Alloc>::await() noexcept {
         m_event.emplace();
-        auto aw = awaitable<T>(m_event->operator co_await(), rc_ptr(this));
+        auto aw = awaitable<T, Alloc>(m_event->operator co_await(), rc_ptr(this));
         resume();
         return aw;
     }
@@ -162,10 +162,10 @@ namespace impl_stream {
 } // namespace impl_stream
 
 
-template <class T>
+template <class T, class Alloc = void>
 class [[nodiscard]] stream {
 public:
-    using promise_type = impl_stream::promise<T>;
+    using promise_type = impl_stream::promise<T, Alloc>;
 
     stream() = default;
     stream(const stream&) = delete;
