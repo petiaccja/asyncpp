@@ -6,23 +6,16 @@
 #include "scheduler.hpp"
 #include "testing/suspension_point.hpp"
 
-#include <atomic>
 #include <cassert>
-#include <coroutine>
-#include <utility>
 
 
 namespace asyncpp {
 
 
-template <class T>
-class task;
-
-
 namespace impl_task {
 
-    template <class T>
-    struct promise : result_promise<T>, resumable_promise, schedulable_promise, impl::leak_checked_promise, rc_from_this {
+    template <class T, class Task, class Event>
+    struct promise : result_promise<T>, resumable_promise, schedulable_promise, rc_from_this {
         struct final_awaitable {
             constexpr bool await_ready() const noexcept { return false; }
             void await_suspend(std::coroutine_handle<promise> handle) const noexcept {
@@ -35,14 +28,14 @@ namespace impl_task {
         };
 
         auto get_return_object() {
-            return task<T>(rc_ptr(this));
+            return Task(rc_ptr(this));
         }
 
-        constexpr auto initial_suspend() noexcept {
+        constexpr auto initial_suspend() const noexcept {
             return std::suspend_always{};
         }
 
-        auto final_suspend() noexcept {
+        auto final_suspend() const noexcept {
             return final_awaitable{};
         }
 
@@ -54,7 +47,7 @@ namespace impl_task {
             return m_scheduler ? m_scheduler->schedule(*this) : handle().resume();
         }
 
-        void start() noexcept {
+        void start() {
             if (!INTERLEAVED(m_started.test_and_set(std::memory_order_relaxed))) {
                 m_self.reset(this);
                 resume();
@@ -73,27 +66,26 @@ namespace impl_task {
 
     private:
         std::atomic_flag m_started;
-        event<T> m_event;
+        Event m_event;
         rc_ptr<promise> m_self;
     };
 
-    template <class T>
-    struct awaitable : event<T>::awaitable {
-        using base = typename event<T>::awaitable;
+    template <class T, class Promise, class Event>
+    struct awaitable : Event::awaitable {
+        rc_ptr<Promise> m_awaited = nullptr;
 
-        rc_ptr<promise<T>> m_awaited = nullptr;
-
-        awaitable(base base, rc_ptr<promise<T>> awaited) : event<T>::awaitable(std::move(base)), m_awaited(awaited) {
+        awaitable(typename Event::awaitable base, rc_ptr<Promise> awaited)
+            : Event::awaitable(std::move(base)), m_awaited(awaited) {
             assert(m_awaited);
         }
     };
 
-    template <class T>
-    auto promise<T>::await(rc_ptr<promise> pr) {
+    template <class T, class Task, class Event>
+    auto promise<T, Task, Event>::await(rc_ptr<promise> pr) {
         assert(pr);
         pr->start();
         auto base = pr->m_event.operator co_await();
-        return awaitable<T>{ std::move(base), std::move(pr) };
+        return awaitable<T, promise, Event>{ std::move(base), std::move(pr) };
     }
 
 } // namespace impl_task
@@ -102,7 +94,7 @@ namespace impl_task {
 template <class T>
 class [[nodiscard]] task {
 public:
-    using promise_type = impl_task::promise<T>;
+    using promise_type = impl_task::promise<T, task, event<T>>;
 
     task() = default;
     task(const task& rhs) = delete;
@@ -135,6 +127,45 @@ public:
     auto operator co_await() {
         assert(valid());
         return promise_type::await(std::move(m_promise));
+    }
+
+private:
+    rc_ptr<promise_type> m_promise;
+};
+
+
+template <class T>
+class [[nodiscard]] shared_task {
+public:
+    using promise_type = impl_task::promise<T, shared_task, broadcast_event<T>>;
+
+    shared_task() = default;
+    shared_task(rc_ptr<promise_type> promise) : m_promise(std::move(promise)) {}
+
+    bool valid() const {
+        return !!m_promise;
+    }
+
+    bool ready() const {
+        assert(valid());
+        return m_promise->ready();
+    }
+
+    void launch() {
+        assert(valid());
+        m_promise->start();
+    }
+
+    void bind(scheduler& scheduler) {
+        assert(valid());
+        if (m_promise) {
+            m_promise->m_scheduler = &scheduler;
+        }
+    }
+
+    auto operator co_await() {
+        assert(valid());
+        return promise_type::await(m_promise);
     }
 
 private:

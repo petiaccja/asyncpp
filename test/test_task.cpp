@@ -1,7 +1,6 @@
 #include "helper_schedulers.hpp"
 
 #include <asyncpp/join.hpp>
-#include <asyncpp/shared_task.hpp>
 #include <asyncpp/task.hpp>
 #include <asyncpp/testing/interleaver.hpp>
 
