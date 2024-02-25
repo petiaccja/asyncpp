@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <coroutine>
 #include <cstddef>
 #include <memory>
@@ -114,7 +115,7 @@ private:
     using dealloc_t = void (*)(void*, size_t);
 
     static constexpr auto dealloc_offset(size_t size) {
-        static constexpr auto dealloc_alignment = alignof(dealloc_t);
+        constexpr auto dealloc_alignment = alignof(dealloc_t);
         return (size + dealloc_alignment - 1) / dealloc_alignment * dealloc_alignment;
     }
 
