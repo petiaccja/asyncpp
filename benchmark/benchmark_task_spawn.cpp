@@ -21,14 +21,14 @@ task<int> allocator_backed(std::allocator_arg_t, std::pmr::polymorphic_allocator
 
 
 std::pmr::polymorphic_allocator<>& get_new_delete_alloc() {
-    static auto alloc = std::pmr::polymorphic_allocator(std::pmr::new_delete_resource());
+    static auto alloc = std::pmr::polymorphic_allocator<>(std::pmr::new_delete_resource());
     return alloc;
 }
 
 
 std::pmr::polymorphic_allocator<>& get_unsynchronized_pool_alloc() {
     static auto resource = std::pmr::unsynchronized_pool_resource(std::pmr::new_delete_resource());
-    static auto alloc = std::pmr::polymorphic_allocator(&resource);
+    static auto alloc = std::pmr::polymorphic_allocator<>(&resource);
     return alloc;
 }
 
@@ -36,12 +36,12 @@ std::pmr::polymorphic_allocator<>& get_unsynchronized_pool_alloc() {
 std::pmr::polymorphic_allocator<>& get_stack_alloc(bool renew) {
     static std::vector<std::byte> initial_buffer(1048576);
     static auto resource = std::pmr::monotonic_buffer_resource(initial_buffer.data(), initial_buffer.size(), std::pmr::new_delete_resource());
-    static auto alloc = std::pmr::polymorphic_allocator(&resource);
+    static auto alloc = std::pmr::polymorphic_allocator<>(&resource);
     if (renew) {
         alloc.~polymorphic_allocator();
         resource.~monotonic_buffer_resource();
         new (&resource) std::pmr::monotonic_buffer_resource(initial_buffer.data(), initial_buffer.size(), std::pmr::new_delete_resource());
-        new (&alloc) std::pmr::polymorphic_allocator(&resource);
+        new (&alloc) std::pmr::polymorphic_allocator<>(&resource);
     }
     return alloc;
 }
