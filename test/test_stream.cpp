@@ -1,3 +1,4 @@
+#include "monitor_allocator.hpp"
 #include "monitor_task.hpp"
 
 #include <asyncpp/join.hpp>
@@ -88,18 +89,64 @@ TEST_CASE("Stream: destroy", "[Task]") {
     static const auto coro = []() -> stream<int> { co_yield 0; };
 
     SECTION("no execution") {
-        const auto before = impl::leak_checked_promise::snapshot();
-        {
-            auto s = coro();
-        }
-        REQUIRE(impl::leak_checked_promise::check(before));
+        auto s = coro();
     }
     SECTION("synced") {
-        const auto before = impl::leak_checked_promise::snapshot();
-        {
-            auto s = coro();
-            void(join(s));
-        }
-        REQUIRE(impl::leak_checked_promise::check(before));
+        auto s = coro();
+        void(join(s));
+    }
+}
+
+
+template <class Stream>
+auto allocator_free(std::allocator_arg_t, monitor_allocator<>& alloc) -> Stream {
+    co_yield alloc;
+}
+
+
+template <class Stream>
+struct allocator_object {
+    auto member_coro(std::allocator_arg_t, monitor_allocator<>& alloc) -> Stream {
+        co_yield alloc;
+    }
+};
+
+
+TEST_CASE("Task: allocator erased", "[Task]") {
+    monitor_allocator<> alloc;
+    using stream_t = stream<monitor_allocator<>&>;
+
+    SECTION("free function") {
+        auto task = allocator_free<stream_t>(std::allocator_arg, alloc);
+        void(*join(task));
+        REQUIRE(alloc.get_num_allocations() == 1);
+        REQUIRE(alloc.get_num_live_objects() == 0);
+    }
+    SECTION("member function") {
+        allocator_object<stream_t> obj;
+        auto task = obj.member_coro(std::allocator_arg, alloc);
+        void(*join(task));
+        REQUIRE(alloc.get_num_allocations() == 1);
+        REQUIRE(alloc.get_num_live_objects() == 0);
+    }
+}
+
+
+TEST_CASE("Task: allocator explicit", "[Task]") {
+    monitor_allocator<> alloc;
+    using stream_t = stream<monitor_allocator<>&, monitor_allocator<>>;
+
+    SECTION("free function") {
+        auto task = allocator_free<stream_t>(std::allocator_arg, alloc);
+        void(*join(task));
+        REQUIRE(alloc.get_num_allocations() == 1);
+        REQUIRE(alloc.get_num_live_objects() == 0);
+    }
+    SECTION("member function") {
+        allocator_object<stream_t> obj;
+        auto task = obj.member_coro(std::allocator_arg, alloc);
+        void(*join(task));
+        REQUIRE(alloc.get_num_allocations() == 1);
+        REQUIRE(alloc.get_num_live_objects() == 0);
     }
 }

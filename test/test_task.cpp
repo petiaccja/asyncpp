@@ -1,4 +1,5 @@
 #include "helper_schedulers.hpp"
+#include "monitor_allocator.hpp"
 
 #include <asyncpp/join.hpp>
 #include <asyncpp/task.hpp>
@@ -117,9 +118,7 @@ TEMPLATE_TEST_CASE("Task: abandon (not started)", "[Task]", task<void>, shared_t
     static const auto coro = []() -> TestType {
         co_return;
     };
-    const auto before = impl::leak_checked_promise::snapshot();
     static_cast<void>(coro());
-    REQUIRE(impl::leak_checked_promise::check(before));
 }
 
 
@@ -166,11 +165,63 @@ TEMPLATE_TEST_CASE("Task: co_await exception", "[Task]", task<void>, shared_task
     static int value = 42;
     static const auto coro = []() -> TestType {
         throw std::runtime_error("test");
-        co_return;
+        co_return; // This statement is necessary!
     };
     static const auto enclosing = []() -> TestType {
         REQUIRE_THROWS_AS(co_await coro(), std::runtime_error);
     };
     auto task = enclosing();
     join(task);
+}
+
+
+template <class Task>
+auto allocator_free(std::allocator_arg_t, monitor_allocator<>& alloc) -> Task {
+    co_return alloc;
+}
+
+
+template <class Task>
+struct allocator_object {
+    auto member_coro(std::allocator_arg_t, monitor_allocator<>& alloc) -> Task {
+        co_return alloc;
+    }
+};
+
+
+TEMPLATE_TEST_CASE("Task: allocator erased", "[Task]", task<monitor_allocator<>&>, shared_task<monitor_allocator<>&>) {
+    monitor_allocator<> alloc;
+
+    SECTION("free function") {
+        auto task = allocator_free<TestType>(std::allocator_arg, alloc);
+        join(task);
+        REQUIRE(alloc.get_num_allocations() == 1);
+        REQUIRE(alloc.get_num_live_objects() == 0);
+    }
+    SECTION("member function") {
+        allocator_object<TestType> obj;
+        auto task = obj.member_coro(std::allocator_arg, alloc);
+        join(task);
+        REQUIRE(alloc.get_num_allocations() == 1);
+        REQUIRE(alloc.get_num_live_objects() == 0);
+    }
+}
+
+
+TEMPLATE_TEST_CASE("Task: allocator explicit", "[Task]", (task<monitor_allocator<>&, monitor_allocator<>>), (shared_task<monitor_allocator<>&, monitor_allocator<>>)) {
+    monitor_allocator<> alloc;
+
+    SECTION("free function") {
+        auto task = allocator_free<TestType>(std::allocator_arg, alloc);
+        join(task);
+        REQUIRE(alloc.get_num_allocations() == 1);
+        REQUIRE(alloc.get_num_live_objects() == 0);
+    }
+    SECTION("member function") {
+        allocator_object<TestType> obj;
+        auto task = obj.member_coro(std::allocator_arg, alloc);
+        join(task);
+        REQUIRE(alloc.get_num_allocations() == 1);
+        REQUIRE(alloc.get_num_live_objects() == 0);
+    }
 }

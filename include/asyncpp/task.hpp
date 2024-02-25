@@ -7,6 +7,7 @@
 #include "testing/suspension_point.hpp"
 
 #include <cassert>
+#include <fstream>
 
 
 namespace asyncpp {
@@ -14,8 +15,8 @@ namespace asyncpp {
 
 namespace impl_task {
 
-    template <class T, class Task, class Event>
-    struct promise : result_promise<T>, resumable_promise, schedulable_promise, rc_from_this {
+    template <class T, class Alloc, class Task, class Event>
+    struct promise : result_promise<T>, resumable_promise, schedulable_promise, rc_from_this, allocator_aware_promise<Alloc> {
         struct final_awaitable {
             constexpr bool await_ready() const noexcept { return false; }
             void await_suspend(std::coroutine_handle<promise> handle) const noexcept {
@@ -80,8 +81,8 @@ namespace impl_task {
         }
     };
 
-    template <class T, class Task, class Event>
-    auto promise<T, Task, Event>::await(rc_ptr<promise> pr) {
+    template <class T, class Alloc, class Task, class Event>
+    auto promise<T, Alloc, Task, Event>::await(rc_ptr<promise> pr) {
         assert(pr);
         pr->start();
         auto base = pr->m_event.operator co_await();
@@ -91,16 +92,17 @@ namespace impl_task {
 } // namespace impl_task
 
 
-template <class T>
+template <class T, class Alloc = void>
 class [[nodiscard]] task {
 public:
-    using promise_type = impl_task::promise<T, task, event<T>>;
+    using promise_type = impl_task::promise<T, Alloc, task, event<T>>;
 
     task() = default;
     task(const task& rhs) = delete;
     task& operator=(const task& rhs) = delete;
     task(task&& rhs) noexcept = default;
     task& operator=(task&& rhs) noexcept = default;
+    ~task() = default;
     task(rc_ptr<promise_type> promise) : m_promise(std::move(promise)) {}
 
     bool valid() const {
@@ -134,10 +136,10 @@ private:
 };
 
 
-template <class T>
+template <class T, class Alloc = void>
 class [[nodiscard]] shared_task {
 public:
-    using promise_type = impl_task::promise<T, shared_task, broadcast_event<T>>;
+    using promise_type = impl_task::promise<T, Alloc, shared_task, broadcast_event<T>>;
 
     shared_task() = default;
     shared_task(rc_ptr<promise_type> promise) : m_promise(std::move(promise)) {}
