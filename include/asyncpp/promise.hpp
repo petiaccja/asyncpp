@@ -139,11 +139,11 @@ private:
         };
 
         static constexpr dealloc_t dealloc = [](void* ptr, size_t size) {
-            auto& alloc = *reinterpret_cast<alloc_t*>(static_cast<std::byte*>(ptr) + alloc_offset(size));
-            auto moved = std::move(alloc);
-            alloc.~alloc_t();
+            const auto alloc_ptr = reinterpret_cast<alloc_t*>(static_cast<std::byte*>(ptr) + alloc_offset(size));
+            auto alloc = std::move(*alloc_ptr);
+            alloc_ptr->~alloc_t();
             const auto num_blocks = (total_size(size) + sizeof(block_t) - 1) / sizeof(block_t);
-            std::allocator_traits<alloc_t>::deallocate(moved, static_cast<block_t*>(ptr), num_blocks);
+            std::allocator_traits<alloc_t>::deallocate(alloc, static_cast<block_t*>(ptr), num_blocks);
         };
 
         auto rebound_alloc = alloc_t(alloc);

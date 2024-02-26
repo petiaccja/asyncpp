@@ -20,34 +20,55 @@ task<int> allocator_backed(std::allocator_arg_t, std::pmr::polymorphic_allocator
 }
 
 
-std::pmr::polymorphic_allocator<>& get_new_delete_alloc() {
-    static auto alloc = std::pmr::polymorphic_allocator<>(std::pmr::new_delete_resource());
-    return alloc;
-}
+struct FixtureNewDelete : celero::TestFixture {
+    inline std::pmr::polymorphic_allocator<>& getAlloc() {
+        return alloc;
+    }
+
+private:
+    std::pmr::polymorphic_allocator<> alloc = { std::pmr::new_delete_resource() };
+};
 
 
-std::pmr::polymorphic_allocator<>& get_unsynchronized_pool_alloc() {
-    static auto resource = std::pmr::unsynchronized_pool_resource(std::pmr::new_delete_resource());
-    static auto alloc = std::pmr::polymorphic_allocator<>(&resource);
-    return alloc;
-}
+struct FixturePool : celero::TestFixture {
+    inline std::pmr::polymorphic_allocator<>& getAlloc() {
+        return alloc;
+    }
+
+private:
+    std::pmr::unsynchronized_pool_resource resource;
+    std::pmr::polymorphic_allocator<> alloc = { &resource };
+};
 
 
-std::pmr::polymorphic_allocator<>& get_stack_alloc(bool renew) {
-    static std::vector<std::byte> initial_buffer(1048576);
-    static auto resource = std::pmr::monotonic_buffer_resource(initial_buffer.data(), initial_buffer.size(), std::pmr::new_delete_resource());
-    static auto alloc = std::pmr::polymorphic_allocator<>(&resource);
-    if (renew) {
+struct FixtureStack : celero::TestFixture {
+    void setUp(const ExperimentValue* x) override {
         alloc.~polymorphic_allocator();
         resource.~monotonic_buffer_resource();
-        new (&resource) std::pmr::monotonic_buffer_resource(initial_buffer.data(), initial_buffer.size(), std::pmr::new_delete_resource());
+        new (&resource) std::pmr::monotonic_buffer_resource(buffer.get(), size, std::pmr::new_delete_resource());
         new (&alloc) std::pmr::polymorphic_allocator<>(&resource);
     }
-    return alloc;
-}
+
+    inline std::pmr::polymorphic_allocator<>& getAlloc() {
+        return alloc;
+    }
+
+private:
+    static constexpr inline size_t size = 10485760;
+    struct block {
+        alignas(64) std::byte content[64];
+    };
+    std::unique_ptr<block[]> buffer = std::make_unique_for_overwrite<block[]>(size / sizeof(block));
+    std::pmr::monotonic_buffer_resource resource;
+    std::pmr::polymorphic_allocator<> alloc = { &resource };
+};
 
 
-BASELINE(task_spawn, unoptimized, 60, 50000) {
+constexpr int numSamples = 1000;
+constexpr int numIterations = 5000;
+
+
+BASELINE(task_spawn, unoptimized, numSamples, numIterations) {
     bool ready = false;
     {
         auto task = plain();
@@ -60,7 +81,7 @@ BASELINE(task_spawn, unoptimized, 60, 50000) {
 }
 
 
-BENCHMARK(task_spawn, HALO, 60, 50000) {
+BENCHMARK(task_spawn, HALO, numSamples, numIterations) {
     bool ready = false;
     {
         auto task = plain();
@@ -72,9 +93,9 @@ BENCHMARK(task_spawn, HALO, 60, 50000) {
 }
 
 
-BENCHMARK(task_spawn, PMR_new_delete, 60, 50000) {
+BENCHMARK_F(task_spawn, PMR_new_delete, FixtureNewDelete, numSamples, numIterations) {
     bool ready = false;
-    auto& alloc = get_new_delete_alloc();
+    auto& alloc = getAlloc();
     {
         auto task = allocator_backed(std::allocator_arg, alloc);
         volatile auto ptr = &task;
@@ -86,9 +107,9 @@ BENCHMARK(task_spawn, PMR_new_delete, 60, 50000) {
 }
 
 
-BENCHMARK(task_spawn, PMR_unsync_pool, 60, 50000) {
+BENCHMARK_F(task_spawn, PMR_unsync_pool, FixturePool, numSamples, numIterations) {
     bool ready = false;
-    auto& alloc = get_unsynchronized_pool_alloc();
+    auto& alloc = getAlloc();
     {
         auto task = allocator_backed(std::allocator_arg, alloc);
         volatile auto ptr = &task;
@@ -100,16 +121,14 @@ BENCHMARK(task_spawn, PMR_unsync_pool, 60, 50000) {
 }
 
 
-BENCHMARK(task_spawn, PMR_stack, 60, 50000) {
+BENCHMARK_F(task_spawn, PMR_stack, FixtureStack, numSamples, numIterations) {
     bool ready = false;
-    static int counter = 0;
-    counter = (counter + 1) % 512;
-    auto& alloc = get_stack_alloc(counter == 0);
+    auto& alloc = getAlloc();
     {
         auto task = allocator_backed(std::allocator_arg, alloc);
         volatile auto ptr = &task;
         ptr->launch();
-        ready = ready && ptr->ready();
+        ready = ptr->ready();
     }
     assert(ready);
     celero::DoNotOptimizeAway(ready);
