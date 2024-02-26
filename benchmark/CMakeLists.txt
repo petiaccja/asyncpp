@@ -4,6 +4,7 @@ target_sources(benchmark
 	PRIVATE
 		main.cpp
 		benchmark_task_spawn.cpp
+		benchmark_thread_pool.cpp
 )
 
 
