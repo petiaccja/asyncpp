@@ -190,7 +190,7 @@ public:
         do {
             auto [swarm, scenario] = launch_threads(m_thread_funcs);
             const auto path_ = run_next_interleaving(tree, swarm);
-            if constexpr (std::convertible_to<Scenario, validated_scenario>) {
+            if constexpr (std::convertible_to<std::decay_t<Scenario>&, validated_scenario&>) {
                 scenario->validate(path_);
             }
         } while (!is_transitively_complete(tree, tree.root()));

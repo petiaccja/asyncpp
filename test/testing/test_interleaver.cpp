@@ -193,8 +193,8 @@ TEST_CASE("Interleaver - select resumed", "[Interleaver]") {
 }
 
 
-struct CollectorScenario {
-    CollectorScenario() {
+struct collector_scenario {
+    collector_scenario() {
         interleavings.push_back({});
     }
 
@@ -211,7 +211,7 @@ struct CollectorScenario {
 
 
 TEST_CASE("Interleaver - single thread combinatorics", "[Interleaver]") {
-    struct Scenario : CollectorScenario {
+    struct scenario : collector_scenario {
         void thread_0() {
             INTERLEAVED(hit(0));
             INTERLEAVED(hit(1));
@@ -219,19 +219,19 @@ TEST_CASE("Interleaver - single thread combinatorics", "[Interleaver]") {
         }
     };
 
-    Scenario::reset();
+    scenario::reset();
     INTERLEAVED_RUN(
-        Scenario,
-        THREAD("thread_0", &Scenario::thread_0));
+        scenario,
+        THREAD("thread_0", &scenario::thread_0));
     const std::vector<std::vector<int>> expected = {
         {0, 1, 2}
     };
-    REQUIRE(Scenario::interleavings == expected);
+    REQUIRE(scenario::interleavings == expected);
 }
 
 
 TEST_CASE("Interleaver - two thread combinatorics", "[Interleaver]") {
-    struct Scenario : CollectorScenario {
+    struct scenario : collector_scenario {
         void thread_0() {
             hit(10);
             INTERLEAVED("A0");
@@ -248,14 +248,14 @@ TEST_CASE("Interleaver - two thread combinatorics", "[Interleaver]") {
         }
     };
 
-    Scenario::reset();
+    scenario::reset();
     INTERLEAVED_RUN(
-        Scenario,
-        THREAD("thread_0", &Scenario::thread_0),
-        THREAD("thread_1", &Scenario::thread_1));
+        scenario,
+        THREAD("thread_0", &scenario::thread_0),
+        THREAD("thread_1", &scenario::thread_1));
 
     // Get and sort(!) all executed interleavings.
-    auto interleaveings = std::move(Scenario::interleavings);
+    auto interleaveings = std::move(scenario::interleavings);
     std::ranges::sort(interleaveings);
 
     // Check no interleaving was run twice.
@@ -267,7 +267,7 @@ TEST_CASE("Interleaver - two thread combinatorics", "[Interleaver]") {
 
 
 TEST_CASE("Interleaver - three thread combinatorics", "[Interleaver]") {
-    struct Scenario : CollectorScenario {
+    struct scenario : collector_scenario {
         void thread_0() {
             hit(10);
             INTERLEAVED("A0");
@@ -285,14 +285,14 @@ TEST_CASE("Interleaver - three thread combinatorics", "[Interleaver]") {
         }
     };
 
-    Scenario::reset();
+    scenario::reset();
     INTERLEAVED_RUN(
-        Scenario,
-        THREAD("thread_0", &Scenario::thread_0),
-        THREAD("thread_1", &Scenario::thread_1),
-        THREAD("thread_2", &Scenario::thread_2));
+        scenario,
+        THREAD("thread_0", &scenario::thread_0),
+        THREAD("thread_1", &scenario::thread_1),
+        THREAD("thread_2", &scenario::thread_2));
 
-    auto interleaveings = std::move(Scenario::interleavings);
+    auto interleaveings = std::move(scenario::interleavings);
     std::ranges::sort(interleaveings);
 
     REQUIRE(std::ranges::unique(interleaveings).end() == interleaveings.end());
@@ -301,7 +301,7 @@ TEST_CASE("Interleaver - three thread combinatorics", "[Interleaver]") {
 
 
 TEST_CASE("Interleaver - acquire", "[Interleaver]") {
-    struct Scenario : CollectorScenario {
+    struct scenario : collector_scenario {
         std::atomic_flag f;
 
         void thread_0() {
@@ -318,14 +318,38 @@ TEST_CASE("Interleaver - acquire", "[Interleaver]") {
         }
     };
 
-    Scenario::reset();
+    scenario::reset();
     INTERLEAVED_RUN(
-        Scenario,
-        THREAD("thread_0", &Scenario::thread_0),
-        THREAD("thread_1", &Scenario::thread_1));
+        scenario,
+        THREAD("thread_0", &scenario::thread_0),
+        THREAD("thread_1", &scenario::thread_1));
 
-    auto interleaveings = std::move(Scenario::interleavings);
+    auto interleaveings = std::move(scenario::interleavings);
     std::ranges::sort(interleaveings);
     REQUIRE(interleaveings.size() >= 1);
     REQUIRE(interleaveings[0] == std::vector{ 20, 10 });
+}
+
+
+TEST_CASE("Interleaver - validate", "[Interleaver]") {
+    static size_t validations = 0;
+
+    struct scenario : validated_scenario {
+        std::atomic_flag flag;
+
+        void thread_0() {
+            flag.test_and_set();
+        }
+
+        void validate(const path& p) override {
+            INFO(p.dump());
+            validations++;
+        }
+    };
+
+    INTERLEAVED_RUN(
+        scenario,
+        THREAD("thread_0", &scenario::thread_0));
+
+    REQUIRE(validations == 1);
 }

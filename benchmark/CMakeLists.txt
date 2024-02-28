@@ -5,6 +5,7 @@ target_sources(benchmark
 		main.cpp
 		benchmark_task_spawn.cpp
 		benchmark_thread_pool.cpp
+		benchmark_atomic.cpp
 )
 
 
