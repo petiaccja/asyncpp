@@ -37,17 +37,19 @@ class [[nodiscard]] monitor_task {
             m_counters->exception = std::current_exception();
         }
 
-        void resume() override {
+        void resume() final {
             m_counters->suspensions.fetch_add(1);
-            m_scheduler ? m_scheduler->schedule(*this) : handle().resume();
+            m_scheduler ? m_scheduler->schedule(*this) : resume_now();
         }
 
-        std::coroutine_handle<> handle() override {
-            return std::coroutine_handle<promise>::from_promise(*this);
+        void resume_now() final {
+            const auto handle = std::coroutine_handle<promise>::from_promise(*this);
+            handle.resume();
         }
 
         void destroy() noexcept {
-            handle().destroy();
+            const auto handle = std::coroutine_handle<promise>::from_promise(*this);
+            handle.destroy();
         }
 
         const counters& get_counters() const {

@@ -70,7 +70,7 @@ void thread_pool::execute(worker& local,
                           std::span<worker> workers) {
     do {
         if (const auto item = INTERLEAVED(local.worklist.pop())) {
-            item->handle().resume();
+            item->resume_now();
             continue;
         }
         else if (const auto item = INTERLEAVED(global_worklist.pop())) {

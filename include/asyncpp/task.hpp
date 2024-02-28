@@ -40,12 +40,13 @@ namespace impl_task {
             return final_awaitable{};
         }
 
-        auto handle() -> std::coroutine_handle<> final {
-            return std::coroutine_handle<promise>::from_promise(*this);
+        void resume_now() final {
+            const auto handle = std::coroutine_handle<promise>::from_promise(*this);
+            handle.resume();
         }
 
         void resume() final {
-            return m_scheduler ? m_scheduler->schedule(*this) : handle().resume();
+            return m_scheduler ? m_scheduler->schedule(*this) : resume_now();
         }
 
         void start() {
@@ -62,7 +63,8 @@ namespace impl_task {
         }
 
         void destroy() {
-            handle().destroy();
+            const auto handle = std::coroutine_handle<promise>::from_promise(*this);
+            handle.destroy();
         }
 
     private:

@@ -107,12 +107,13 @@ public:
 
     private:
         void run(pack& pack) {
+            m_local = this;
             size_t stealing_attempt = pack.workers.size();
             bool exit_loop = false;
             while (!exit_loop) {
                 const auto promise = try_get_promise(pack, stealing_attempt, exit_loop);
                 if (promise) {
-                    promise->handle().resume();
+                    promise->resume_now();
                 }
             }
         }
@@ -161,8 +162,8 @@ public:
     }
 
 private:
-    pack m_pack;
-    std::atomic_ptrdiff_t m_next_in_schedule;
+    alignas(64) pack m_pack;
+    alignas(64) std::atomic_ptrdiff_t m_next_in_schedule;
     inline static thread_local worker* m_local = nullptr;
 };
 

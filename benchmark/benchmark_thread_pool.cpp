@@ -13,11 +13,10 @@ using namespace asyncpp;
 
 struct noop_promise : schedulable_promise {
     noop_promise(std::atomic_size_t* counter = nullptr) : counter(counter) {}
-    std::coroutine_handle<> handle() override {
+    void resume_now() override {
         if (counter) {
             counter->fetch_sub(1, std::memory_order_relaxed);
         }
-        return std::noop_coroutine();
     }
     std::atomic_size_t* counter = nullptr;
 };

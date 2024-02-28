@@ -22,7 +22,7 @@ public:
     void resume() {
         const auto promise = m_promise.exchange(nullptr);
         assert(promise != nullptr);
-        promise->handle().resume();
+        promise->resume_now();
     }
 
 private:

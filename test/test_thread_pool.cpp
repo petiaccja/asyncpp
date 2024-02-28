@@ -21,9 +21,8 @@ constexpr size_t branching = 10;
 
 
 struct test_promise : schedulable_promise {
-    std::coroutine_handle<> handle() override {
+    void resume_now() final {
         ++num_queried;
-        return std::noop_coroutine();
     }
     std::atomic_size_t num_queried = 0;
 };

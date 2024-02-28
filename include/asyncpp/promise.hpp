@@ -72,7 +72,7 @@ struct resumable_promise {
 
 struct schedulable_promise {
     virtual ~schedulable_promise() = default;
-    virtual std::coroutine_handle<> handle() = 0;
+    virtual void resume_now() = 0;
     schedulable_promise* m_scheduler_next = nullptr;
     schedulable_promise* m_scheduler_prev = nullptr;
     scheduler* m_scheduler = nullptr;
