@@ -2,6 +2,7 @@
 
 
 #include <cstddef>
+#include <new>
 
 
 namespace asyncpp {
