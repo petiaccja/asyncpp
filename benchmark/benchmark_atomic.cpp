@@ -1,3 +1,5 @@
+#include <asyncpp/threading/cache.hpp>
+
 #include <array>
 #include <atomic>
 #include <thread>
@@ -10,11 +12,14 @@
 // achievable and reasonable on the hardware.
 
 
+using namespace asyncpp;
+
+
 static constexpr size_t base_reps = 4'000'000;
 
 
 BASELINE(atomic_rmw, x1_thread, 30, 1) {
-    alignas(64) std::atomic_size_t counter = 0;
+    alignas(avoid_false_sharing) std::atomic_size_t counter = 0;
     static constexpr size_t reps = base_reps;
 
     static const auto func = [&counter] {
@@ -29,7 +34,7 @@ BASELINE(atomic_rmw, x1_thread, 30, 1) {
 
 
 BENCHMARK(atomic_rmw, x2_thread, 30, 1) {
-    alignas(64) std::atomic_size_t counter = 0;
+    alignas(avoid_false_sharing) std::atomic_size_t counter = 0;
     static constexpr size_t reps = base_reps / 2;
 
     static const auto func = [&counter] {
@@ -44,7 +49,7 @@ BENCHMARK(atomic_rmw, x2_thread, 30, 1) {
 
 
 BENCHMARK(atomic_rmw, x4_thread, 30, 1) {
-    alignas(64) std::atomic_size_t counter = 0;
+    alignas(avoid_false_sharing) std::atomic_size_t counter = 0;
     static constexpr size_t reps = base_reps / 4;
 
     static const auto func = [&counter] {
@@ -59,7 +64,7 @@ BENCHMARK(atomic_rmw, x4_thread, 30, 1) {
 
 
 BENCHMARK(atomic_rmw, x8_thread, 30, 1) {
-    alignas(64) std::atomic_size_t counter = 0;
+    alignas(avoid_false_sharing) std::atomic_size_t counter = 0;
     static constexpr size_t reps = base_reps / 8;
 
     static const auto func = [&counter] {
@@ -74,7 +79,7 @@ BENCHMARK(atomic_rmw, x8_thread, 30, 1) {
 
 
 BASELINE(atomic_read, x1_thread, 30, 1) {
-    alignas(64) std::atomic_size_t counter = 0;
+    alignas(avoid_false_sharing) std::atomic_size_t counter = 0;
     static constexpr size_t reps = base_reps;
 
     static const auto func = [&counter] {
@@ -89,7 +94,7 @@ BASELINE(atomic_read, x1_thread, 30, 1) {
 
 
 BENCHMARK(atomic_read, x2_thread, 30, 1) {
-    alignas(64) std::atomic_size_t counter = 0;
+    alignas(avoid_false_sharing) std::atomic_size_t counter = 0;
     static constexpr size_t reps = base_reps / 2;
 
     static const auto func = [&counter] {
@@ -104,7 +109,7 @@ BENCHMARK(atomic_read, x2_thread, 30, 1) {
 
 
 BENCHMARK(atomic_read, x4_thread, 30, 1) {
-    alignas(64) std::atomic_size_t counter = 0;
+    alignas(avoid_false_sharing) std::atomic_size_t counter = 0;
     static constexpr size_t reps = base_reps / 4;
 
     static const auto func = [&counter] {
@@ -119,7 +124,7 @@ BENCHMARK(atomic_read, x4_thread, 30, 1) {
 
 
 BENCHMARK(atomic_read, x8_thread, 30, 1) {
-    alignas(64) std::atomic_size_t counter = 0;
+    alignas(avoid_false_sharing) std::atomic_size_t counter = 0;
     static constexpr size_t reps = base_reps / 8;
 
     static const auto func = [&counter] {

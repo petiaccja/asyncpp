@@ -40,7 +40,7 @@ struct FixturePool : celero::TestFixture {
         sync();
     }
 
-    thread_pool_3 pool;
+    thread_pool pool;
     std::atomic_size_t num_running;
     std::vector<noop_promise> promises;
 };
@@ -68,7 +68,7 @@ BENCHMARK_F(tp_schedule_outside, x4_thread, FixturePool<4>, 30, 1) {
 
 
 BASELINE_F(tp_schedule_inside, x1_thread, FixturePool<1>, 30, 1) {
-    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool_3& pool) -> task<void> {
+    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool& pool) -> task<void> {
         for (auto& promise : promises) {
             pool.schedule(promise);
         }
@@ -80,7 +80,7 @@ BASELINE_F(tp_schedule_inside, x1_thread, FixturePool<1>, 30, 1) {
 
 
 BENCHMARK_F(tp_schedule_inside, x2_thread, FixturePool<2>, 30, 1) {
-    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool_3& pool) -> task<void> {
+    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool& pool) -> task<void> {
         for (auto& promise : promises) {
             pool.schedule(promise);
         }
@@ -95,7 +95,7 @@ BENCHMARK_F(tp_schedule_inside, x2_thread, FixturePool<2>, 30, 1) {
 
 
 BENCHMARK_F(tp_schedule_inside, x4_thread, FixturePool<4>, 30, 1) {
-    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool_3& pool) -> task<void> {
+    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool& pool) -> task<void> {
         for (auto& promise : promises) {
             pool.schedule(promise);
         }
@@ -114,7 +114,7 @@ BENCHMARK_F(tp_schedule_inside, x4_thread, FixturePool<4>, 30, 1) {
 
 
 BASELINE_F(tp_stealing, x1_thread, FixturePool<1 + 1>, 30, 1) {
-    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool_3& pool) -> task<void> {
+    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool& pool) -> task<void> {
         for (auto& promise : promises) {
             pool.schedule(promise);
         }
@@ -125,7 +125,7 @@ BASELINE_F(tp_stealing, x1_thread, FixturePool<1 + 1>, 30, 1) {
 
 
 BENCHMARK_F(tp_stealing, x2_thread, FixturePool<2 + 1>, 30, 1) {
-    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool_3& pool) -> task<void> {
+    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool& pool) -> task<void> {
         for (auto& promise : promises) {
             pool.schedule(promise);
         }
@@ -136,7 +136,7 @@ BENCHMARK_F(tp_stealing, x2_thread, FixturePool<2 + 1>, 30, 1) {
 
 
 BENCHMARK_F(tp_stealing, x4_thread, FixturePool<4 + 1>, 30, 1) {
-    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool_3& pool) -> task<void> {
+    static constexpr auto coro = [](std::span<noop_promise> promises, thread_pool& pool) -> task<void> {
         for (auto& promise : promises) {
             pool.schedule(promise);
         }

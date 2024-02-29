@@ -1,5 +1,6 @@
 #include <asyncpp/join.hpp>
 #include <asyncpp/task.hpp>
+#include <asyncpp/threading/cache.hpp>
 
 #include <array>
 #include <memory_resource>
@@ -56,7 +57,7 @@ struct FixtureStack : celero::TestFixture {
 private:
     static constexpr inline size_t size = 10485760;
     struct block {
-        alignas(64) std::byte content[64];
+        alignas(avoid_false_sharing) std::byte content[avoid_false_sharing];
     };
     std::unique_ptr<block[]> buffer = std::make_unique_for_overwrite<block[]>(size / sizeof(block));
     std::pmr::monotonic_buffer_resource resource;

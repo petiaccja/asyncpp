@@ -5,92 +5,130 @@
 namespace asyncpp {
 
 
-thread_pool::thread_pool(size_t num_threads)
-    : m_workers(num_threads) {
-    for (auto& w : m_workers) {
-        w.thread = std::jthread([this, &w] {
-            local = &w;
-            execute(w, m_global_worklist, m_global_notification, m_global_mutex, m_terminate, m_num_waiting, m_workers);
-        });
+thread_pool::worker::worker()
+    : m_sema(0) {}
+
+
+thread_pool::worker::~worker() {
+    cancel();
+}
+
+
+void thread_pool::worker::insert(schedulable_promise& promise) {
+    std::unique_lock lk(m_spinlock, std::defer_lock);
+    INTERLEAVED_ACQUIRE(lk.lock());
+    const auto previous = m_promises.push_back(&promise);
+    const auto blocked = m_blocked.test(std::memory_order_relaxed);
+    INTERLEAVED(lk.unlock());
+
+    if (!previous && blocked) {
+        INTERLEAVED(m_sema.release());
     }
 }
 
 
-thread_pool::~thread_pool() {
-    std::lock_guard lk(m_global_mutex);
-    m_terminate.test_and_set();
-    m_global_notification.notify_all();
+schedulable_promise* thread_pool::worker::steal_from_this() {
+    std::unique_lock lk(m_spinlock, std::defer_lock);
+    INTERLEAVED(lk.lock());
+    return m_promises.pop_front();
 }
 
 
-void thread_pool::schedule(schedulable_promise& promise) {
-    schedule(promise, m_global_worklist, m_global_notification, m_global_mutex, m_num_waiting, local);
-}
+schedulable_promise* thread_pool::worker::try_get_promise(pack& pack, size_t& stealing_attempt, bool& exit_loop) {
+    std::unique_lock lk(m_spinlock, std::defer_lock);
+    INTERLEAVED_ACQUIRE(lk.lock());
+    const auto promise = m_promises.front();
+    if (promise) {
+        m_promises.pop_front();
+        return promise;
+    }
+
+    if (stealing_attempt > 0) {
+        INTERLEAVED(lk.unlock());
+        const auto stolen = steal_from_other(pack, stealing_attempt);
+        stealing_attempt = stolen ? pack.workers.size() : stealing_attempt - 1;
+        return stolen;
+    }
 
 
-void thread_pool::schedule(schedulable_promise& item,
-                           atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
-                           std::condition_variable& global_notification,
-                           std::mutex& global_mutex,
-                           std::atomic_size_t& num_waiting,
-                           worker* local) {
-    if (local) {
-        const auto prev_item = INTERLEAVED(local->worklist.push(&item));
-        if (prev_item != nullptr) {
-            if (num_waiting.load(std::memory_order_relaxed) > 0) {
-                global_notification.notify_one();
-            }
-        }
+    if (INTERLEAVED(m_cancelled.test(std::memory_order_relaxed))) {
+        exit_loop = true;
     }
     else {
-        std::unique_lock lk(global_mutex, std::defer_lock);
-        INTERLEAVED_ACQUIRE(lk.lock());
-        INTERLEAVED(global_worklist.push(&item));
-        INTERLEAVED(global_notification.notify_one());
-    }
-}
-
-
-schedulable_promise* thread_pool::steal(std::span<worker> workers) {
-    for (auto& w : workers) {
-        if (const auto item = INTERLEAVED(w.worklist.pop())) {
-            return item;
-        }
+        INTERLEAVED(m_blocked.test_and_set(std::memory_order_relaxed));
+        pack.blocked.push(this);
+        pack.num_blocked.fetch_add(1, std::memory_order_relaxed);
+        INTERLEAVED(lk.unlock());
+        INTERLEAVED_ACQUIRE(m_sema.acquire());
+        INTERLEAVED(m_blocked.clear());
+        stealing_attempt = pack.workers.size();
     }
     return nullptr;
 }
 
 
-void thread_pool::execute(worker& local,
-                          atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
-                          std::condition_variable& global_notification,
-                          std::mutex& global_mutex,
-                          std::atomic_flag& terminate,
-                          std::atomic_size_t& num_waiting,
-                          std::span<worker> workers) {
-    do {
-        if (const auto item = INTERLEAVED(local.worklist.pop())) {
-            item->resume_now();
-            continue;
+schedulable_promise* thread_pool::worker::steal_from_other(pack& pack, size_t& stealing_attempt) const {
+    const size_t pack_size = pack.workers.size();
+    const size_t my_index = this - pack.workers.data();
+    const size_t victim_index = (my_index + stealing_attempt) % pack_size;
+    return pack.workers[victim_index].steal_from_this();
+}
+
+
+void thread_pool::worker::start(pack& pack) {
+    m_thread = std::jthread([this, &pack] {
+        run(pack);
+    });
+}
+
+
+void thread_pool::worker::cancel() {
+    std::unique_lock lk(m_spinlock, std::defer_lock);
+    INTERLEAVED_ACQUIRE(lk.lock());
+    INTERLEAVED(m_cancelled.test_and_set(std::memory_order_relaxed));
+    const auto blocked = INTERLEAVED(m_blocked.test(std::memory_order_relaxed));
+    lk.unlock();
+    if (blocked) {
+        INTERLEAVED(m_sema.release());
+    }
+}
+
+
+void thread_pool::worker::run(pack& pack) {
+    m_local = this;
+    size_t stealing_attempt = pack.workers.size();
+    bool exit_loop = false;
+    while (!exit_loop) {
+        const auto promise = try_get_promise(pack, stealing_attempt, exit_loop);
+        if (promise) {
+            promise->resume_now();
         }
-        else if (const auto item = INTERLEAVED(global_worklist.pop())) {
-            local.worklist.push(item);
-            continue;
-        }
-        else if (const auto item = steal(workers)) {
-            local.worklist.push(item);
-            continue;
-        }
-        else {
-            std::unique_lock lk(global_mutex, std::defer_lock);
-            INTERLEAVED_ACQUIRE(lk.lock());
-            if (!INTERLEAVED(terminate.test()) && INTERLEAVED(global_worklist.empty())) {
-                num_waiting.fetch_add(1, std::memory_order_relaxed);
-                INTERLEAVED_ACQUIRE(global_notification.wait(lk));
-                num_waiting.fetch_sub(1, std::memory_order_relaxed);
-            }
-        }
-    } while (!INTERLEAVED(terminate.test()));
+    }
+}
+
+
+thread_pool::thread_pool(size_t num_threads)
+    : m_pack(std::vector<worker>(num_threads)), m_next_in_schedule(0) {
+    for (auto& worker : m_pack.workers) {
+        worker.start(m_pack);
+    }
+}
+
+
+void thread_pool::schedule(schedulable_promise& promise) {
+    size_t num_blocked = m_pack.num_blocked.load(std::memory_order_relaxed);
+    const auto blocked = num_blocked > 0 ? m_pack.blocked.pop() : nullptr;
+    if (blocked) {
+        blocked->insert(promise);
+        m_pack.num_blocked.fetch_sub(1, std::memory_order_relaxed);
+    }
+    else if (m_local) {
+        m_local->insert(promise);
+    }
+    else {
+        const auto selected = m_next_in_schedule.fetch_add(1, std::memory_order_relaxed) % m_pack.workers.size();
+        m_pack.workers[selected].insert(promise);
+    }
 }
 
 
