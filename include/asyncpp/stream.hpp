@@ -100,16 +100,18 @@ namespace impl_stream {
             m_result = std::nullopt;
         }
 
-        auto handle() -> std::coroutine_handle<> override {
-            return std::coroutine_handle<promise>::from_promise(*this);
+        void resume() final {
+            return m_scheduler ? m_scheduler->schedule(*this) : resume_now();
         }
 
-        void resume() override {
-            return m_scheduler ? m_scheduler->schedule(*this) : handle().resume();
+        void resume_now() final {
+            const auto handle = std::coroutine_handle<promise>::from_promise(*this);
+            handle.resume();
         }
 
         void destroy() noexcept {
-            handle().destroy();
+            const auto handle = std::coroutine_handle<promise>::from_promise(*this);
+            handle.destroy();
         }
 
         auto await() noexcept;

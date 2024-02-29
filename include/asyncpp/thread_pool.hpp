@@ -1,63 +1,69 @@
 #pragma once
 
 
+#include "container/atomic_deque.hpp"
 #include "container/atomic_stack.hpp"
 #include "scheduler.hpp"
+#include "threading/cache.hpp"
+#include "threading/spinlock.hpp"
 
 #include <atomic>
 #include <condition_variable>
-#include <span>
+#include <semaphore>
 #include <thread>
 #include <vector>
 
 
 namespace asyncpp {
 
-
 class thread_pool : public scheduler {
 public:
-    struct worker {
+    struct pack;
+
+    class worker {
+    public:
+        using queue = deque<schedulable_promise, &schedulable_promise::m_scheduler_prev, &schedulable_promise::m_scheduler_next>;
+
+        worker();
+        ~worker();
+
+        void insert(schedulable_promise& promise);
+        schedulable_promise* steal_from_this();
+        schedulable_promise* try_get_promise(pack& pack, size_t& stealing_attempt, bool& exit_loop);
+        schedulable_promise* steal_from_other(pack& pack, size_t& stealing_attempt) const;
+        void start(pack& pack);
+        void cancel();
+
+    private:
+        void run(pack& pack);
+
+    public:
         worker* m_next = nullptr;
 
-        std::jthread thread;
-        atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> worklist;
+    private:
+        alignas(avoid_false_sharing) spinlock m_spinlock;
+        alignas(avoid_false_sharing) queue m_promises;
+        alignas(avoid_false_sharing) std::atomic_flag m_blocked;
+        alignas(avoid_false_sharing) std::binary_semaphore m_sema;
+        alignas(avoid_false_sharing) std::jthread m_thread;
+        alignas(avoid_false_sharing) std::atomic_flag m_cancelled;
     };
 
-    thread_pool(size_t num_threads = 1);
-    thread_pool(thread_pool&&) = delete;
-    thread_pool operator=(thread_pool&&) = delete;
-    ~thread_pool();
+    struct pack {
+        alignas(avoid_false_sharing) std::vector<worker> workers;
+        alignas(avoid_false_sharing) atomic_stack<worker, &worker::m_next> blocked;
+        alignas(avoid_false_sharing) std::atomic_size_t num_blocked = 0;
+    };
 
+
+public:
+    thread_pool(size_t num_threads = 1);
     void schedule(schedulable_promise& promise) override;
 
-
-    static void schedule(schedulable_promise& item,
-                         atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
-                         std::condition_variable& global_notification,
-                         std::mutex& global_mutex,
-                         std::atomic_size_t& num_waiting,
-                         worker* local = nullptr);
-
-    static schedulable_promise* steal(std::span<worker> workers);
-
-    static void execute(worker& local,
-                        atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next>& global_worklist,
-                        std::condition_variable& global_notification,
-                        std::mutex& global_mutex,
-                        std::atomic_flag& terminate,
-                        std::atomic_size_t& num_waiting,
-                        std::span<worker> workers);
-
 private:
-    std::condition_variable m_global_notification;
-    std::mutex m_global_mutex;
-    atomic_stack<schedulable_promise, &schedulable_promise::m_scheduler_next> m_global_worklist;
-    std::vector<worker> m_workers;
-    std::atomic_flag m_terminate;
-    std::atomic_size_t m_num_waiting = 0;
-
-    inline static thread_local worker* local = nullptr;
+    alignas(avoid_false_sharing) pack m_pack;
+    alignas(avoid_false_sharing) std::atomic_ptrdiff_t m_next_in_schedule;
+    inline static thread_local worker* m_local = nullptr;
 };
-
 
 } // namespace asyncpp
