@@ -1,6 +1,9 @@
 #pragma once
 
 
+#include <cstddef>
+
+
 namespace asyncpp {
 
 #ifdef __cpp_lib_hardware_interference_size
