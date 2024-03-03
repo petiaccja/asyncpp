@@ -38,7 +38,7 @@
 
 ## Coroutines crash course
 
-If you're new to coroutines, the rest of the documentation may be difficult to understand. This crash course on C++20 coroutines will hopefully give you enough bases to get started using this library.
+If you're new to coroutines, the rest of the documentation may be difficult to understand. This crash course on C++20 coroutines will hopefully give you enough basis to get started using this library.
 
 ### The architectural layers of C++ coroutines
 
