@@ -6,7 +6,7 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=petiaccja_asyncpp&metric=alert_status)](https://sonarcloud.io/dashboard?id=petiaccja_asyncpp)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=petiaccja_asyncpp&metric=coverage)](https://sonarcloud.io/dashboard?id=petiaccja_asyncpp)
 
-`asyncpp` is a C++20 coroutine library that enables you to simply write asynchronous and parallel code.
+`asyncpp` is a C++20 coroutine library that enables you to write asynchronous and parallel code with a clean syntax.
 
 ## Features
 
@@ -38,7 +38,7 @@
 
 ## Coroutines crash course
 
-If you're new to coroutines, the rest of the documentation may be a bit difficult to understand. This little crash course on C++20 coroutines will hopefully make your life easier.
+If you're new to coroutines, the rest of the documentation may be difficult to understand. This crash course on C++20 coroutines will hopefully give you enough bases to get started using this library.
 
 ### The architectural layers of C++ coroutines
 
@@ -78,19 +78,17 @@ You can use the higher level primitives of the coroutine libraries to implement 
 ```c++
 // With coroutines:
 asyncpp::task<int> add(int a, int b) {
-	asyncpp::unique_lock lk(co_await mtx);
 	co_return a + b;
 }
 
 // With OS threading:
 std::future<int> add(int a, int b) {
-	std::unique_lock lk(mtx);
 	return std::async([a, b]{ return a + b; });
 }
 ```
 
 
-### How coroutines work in practice
+### How coroutines work: a practical approach
 
 Consider the following code using OS threading:
 
@@ -179,24 +177,13 @@ critical section
 post section
 ```
 
-This looks rather complicated, but fortunately we can simplify it with a simple assumption: when you call `work(mtx)`, you have to assume it's running asynchronously in another thread as `my_main` immediately continues. Since, as a consequence, you don't know when `work`'s results are actually available, you have to synchronize by `co_await`ing it.
+This looks rather complicated, but the key idea is that when you call `work(mtx)`, it does not run immediately in the current thread, like a function, but runs asynchronously on any thread. Consequently, you also can't just access its return value, you must synchronize using `co_await`.
 
-It's important to understand that `work` may or may not in fact be running in another thread, and the only purpose of this mental model is to understand where you have ordering guarantees in your code. Coroutine libraries allow you to fine tune which threads execute which coroutines.
-
-Regarding the suspension of coroutines, it's different than suspending threads. When you suspend a thread, the operating system saves its state and puts it into a pile for later resumption. When you suspend a coroutine, it's the compiler's runtime library that saves its state, and the coroutine library you're using that puts it into a pile for later resumption. A suspended coroutine can subsequently be resumed on any thread, not just the one that suspended it. When you suspend a coroutine, the operating system does not suspend the thread that was executing your coroutine.
-
-In C++, you can suspend a coroutine only at specific locations called *suspension points*. These locations correspond to `co_await` and `co_yield` statements in the coroutine's body. Additionally, all coroutines have an initial and a final suspension point, but those are mainly important for coroutine library developers.
+When it comes to `co_await`, it is not a thread synchronization primitive like `std::condition_variable`. `co_await` does not actually block the current thread, it merely suspends the coroutine at a so called *suspension point*. Later, the thread that completes the coroutine that is being `co_await`ed (in this case, `work`), is responsible for continuing the suspended coroutine (in this case, `my_main`). You can view this as cooperative multi-tasking as opposed to the operating system's preemptive multi-tasking. Suspension points are introduced by the `co_await` and `co_yield` statements, though coroutines also have an initial and final suspension point. The latter two are more important for library developers.
 
 ### Thinking in coroutines
 
-If you're a seasoned developer in procedural programming languages, you might be tempted to think about coroutines as special functions that can be suspended mid-execution and have a fancy return value. I think a better approach is to look at functions as a specialization of coroutines instead. In light of that, you can sketch up the following hierarchy:
-
-- Coroutine: a block of stateful, standalone code, that can be suspended at specific points
-	- Function: a special coroutine that has no suspension points
-	- Task: a coroutine that returns one value, defined using the `task<T>` return type
-	- Generator: a coroutine that yields multiple values, defined using the `generator<T>` return type
-
-This way, it's fairly easy to plug new subclasses of coroutines, like streams, into your mental model.
+When approaching coroutines from a procedural programming standpoint, it's logical to think about coroutines as special function that can be suspended mid-execution. I'd rather suggest the other way around: consider functions as special coroutines that have zero suspension points. This is especially useful for C++, where we can implement different types of coroutines via coroutine libraries, because we can regard plain old functions, as well as tasks, generators, streams, etc., as a "subclass" of a general coroutine. 
 
 ## Using asyncpp
 
