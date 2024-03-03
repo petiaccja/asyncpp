@@ -453,7 +453,7 @@ task<int, /* Alloc = */ void> coroutine(std::allocator_arg_t, std::pmr::polymorp
 }
 ```
 
-The need for specifying allocators come from the fact that coroutines have to do dynamic allocation on creation, as their body's state cannot be placed on the stack, it must be placed on the heap to survive suspension and possible moves to another thread. Allocators help you control how exactly the coroutine's state will be allocated. (Note: compilers may do a Heap Allocation eLimination Optimization (HALO) to avoid allocations altogether, but `asyncpp`'s coroutines use a design for parallelism that is difficult to optimize for the compilers.)
+The need for specifying allocators comes from the fact that coroutines have to do dynamic allocation on creation, as their body's state cannot be placed on the stack, it must be placed on the heap to survive suspension and possible moves to another thread. Allocators help you control how exactly the coroutine's state will be allocated. (Note: compilers may do a Heap Allocation eLimination Optimization (HALO) to avoid allocations altogether, but `asyncpp`'s coroutines use a design for parallelism that is difficult to optimize by the compilers.)
 
 
 ### <a name="feature_integration"></a> Integration with other coroutine libraries
@@ -554,18 +554,18 @@ struct my_primitive {
 }
 ```
 
-When you have await this synchronization primitive, you have the opportunity to store the awaiting coroutine's handle. If the awaiting coroutine is an `asyncpp` coroutine, it will have the `resumable_promise` interface implemented, and you should give it special treatment: instead of simply resuming the coroutine handle, you should use the `resumable_promise`'s `resume` method, which will take care of using the proper scheduler.
+When you await a synchronization primitive, like `my_primitive`, you have the opportunity to store the awaiting coroutine's handle in `await_suspend`. If the awaiting coroutine is an `asyncpp` coroutine, it will have the `resumable_promise` interface implemented, and you should give it special treatment: instead of simply resuming the coroutine handle, you should use the `resumable_promise`'s `resume` method, which will take care of using the proper scheduler.
 
 
 ## Contributing
 
 ### Adding features
 
-Check out the section of the documentation about extending `asyncpp`. This should provide make adding a new feature fairly straightforward.
+Check out the section of the documentation about extending `asyncpp`. This should make adding a new feature fairly straightforward.
 
-Multi-threaded code is notoriously error-prone, therefore proper tests are expected for every new feature. `asyncpp` comes with a mini framework to exhaustively test multi-threaded code by running all possible orderings. Interleaved tests should be present when applicable. Look at existing tests for reference.
+Multi-threaded code is notoriously error-prone, therefore proper tests are expected for every new feature. `asyncpp` comes with a mini framework to exhaustively test multi-threaded code by running all possible thread interleavings. Interleaved tests should be present when applicable. Look at existing tests for reference.
 
-Strive to make code as short and simple as possible, and break it down to pieces as small as possible. This helps both with testing and makes it easier to reason about the code, which is of utmost important with multi-threaded code.
+Strive to make code as short and simple as possible, and break it down to pieces as small as possible. This helps with testing and makes it easier to reason about the code, hopefully making it less riddled with bugs despite the complicated nature of multi-threading.
 
 ### Reporting bugs
 
