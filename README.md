@@ -6,230 +6,591 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=petiaccja_asyncpp&metric=alert_status)](https://sonarcloud.io/dashboard?id=petiaccja_asyncpp)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=petiaccja_asyncpp&metric=coverage)](https://sonarcloud.io/dashboard?id=petiaccja_asyncpp)
 
-async++ is a C++20 coroutine library that provides primitives to write async and parallel code.
+`asyncpp` is a C++20 coroutine library that enables you to simply write asynchronous and parallel code.
+
+## Features
+
+**Coroutines**:
+- [task](#feature_task)
+- [shared_task](#feature_task)
+- [generator](#feature_generator)
+- [stream](#feature_stream)
+
+**Synchronization primitives**:
+- [event](#feature_event)
+- [broadcast_event](#feature_event)
+- [mutex](#feature_mutex)
+- [shared_mutex](#feature_mutex)
+
+**Utilities**:
+- [join](#feature_join)
+- [sleep_for, sleep_until](#feature_sleep)
+
+**Schedulers**:
+- [Introduction](#feature_scheduler)
+- [thread_pool](#feature_thread_pool)
+
+**Extra**:
+- [Allocator awareness](#feature_allocator)
+- [Integration with other coroutine libraries](#feature_integration)
+- [Extending asyncpp](#feature_extension)
 
 
-## Usage
+## Coroutines crash course
 
-In this section:
-- [Coroutine primitives](#coroutine_primitives)
-- [Synchronization primitives](#sync_primitives)
-- [Schedulers](#usage_schedulers)
-- [Synchronizing coroutines and functions](#sync_join)
-- [Interaction with other coroutine libraries](#extending_asyncpp)
+If you're new to coroutines, the rest of the documentation may be a bit difficult to understand. This little crash course on C++20 coroutines will hopefully make your life easier.
 
-### <a name="coroutine_primitives"></a>Coroutine primitives
+### The architectural layers of C++ coroutines
 
-asyncpp implements the following coroutine primitives:
-- coroutine primitives:
-	- [task\<T\>](#usage_task)
-	- [shared_task\<T\>](#usage_shared_task)
-	- [generator\<T\>](#usage_generator)
-	- [stream\<T\>](#usage_stream)
+In C++, coroutine support is split into three distinct layers:
+1. Compiler layer: what `asyncpp` is built on
+2. Library layer: `asyncpp` itself
+3. Application layer: your application built using `asyncpp`
 
+#### Compiler layer
 
-#### <a name="usage_task"></a>Using `task<T>`
-
-`task<T>` works similarly to `std::future<T>`:
-- It returns one value
-- Cannot be copied
-- Can only be awaited once
-
-Defining a coroutine:
+C++20 introduces three new keywords into the language:
 ```c++
-task<int> my_coro() {
+co_await <awaitable>;
+co_yield <value>;
+co_return <value>;
+```
+
+These keywords are different than the ones you are used to, as their behaviour can be "scripted" by implementing a few interfaces. Imagine as if the compiler exposed an API for `throw` and you had to implement stack unwinding yourself. As you can guess, using the compiler layer directly would be really cumbersome, that's why we have coroutine libraries.
+
+#### Library layer
+
+`asyncpp` (and other coroutine libraries) implement the interfaces of the compiler layer and define higher level primitives such as `task<T>`, `generator<T>`, or `mutex`. These primitives are intuitive, and therefore enable practical applications of coroutines.
+
+A small excerpt of what the library layer code might look like:
+
+```c++
+template <class T>
+class task {
+	awaitable operator co_await() { /* ... */ }
+};
+```
+
+#### Application layer
+
+You can use the higher level primitives of the coroutine libraries to implement intuitive asynchronous and parallel code:
+
+```c++
+// With coroutines:
+asyncpp::task<int> add(int a, int b) {
+	asyncpp::unique_lock lk(co_await mtx);
+	co_return a + b;
+}
+
+// With OS threading:
+std::future<int> add(int a, int b) {
+	std::unique_lock lk(mtx);
+	return std::async([a, b]{ return a + b; });
+}
+```
+
+
+### How coroutines work in practice
+
+Consider the following code using OS threading:
+
+```c++
+void work(std::mutex& mtx) {
+	std::cout << "init section" << std::endl;
+	mtx.lock();
+	std::cout << "critical section" << std::endl;
+	mtx.unlock();
+}
+
+void my_main(std::mutex& mtx) {
+	work(mtx);
+	std::cout << "post section" << std::endl;
+}
+```
+
+When you run `my_main`, the following will happen in order:
+- Entering `my_main`
+	- Entering `work`
+		- Executing *init section*
+		- Blocking current thread (assuming mutex not free)
+		- ... another thread unlocks the mutex
+		- Resuming current thread
+		- Executing critical section
+	- Exiting `work`
+	- Executing *post section*
+- Exiting `my_main`
+
+As such, the text printed will in **all cases** be:
+```
+init section
+critical section
+post section
+```
+
+Let's look at a very similar piece of code implemented using coroutines:
+
+```c++
+example::task<void> work(example::mutex& mtx) {
+	std::cout << "init section" << std::endl;
+	co_await mtx;
+	std::cout << "critical section" << std::endl;
+	mtx.unlock();
+}
+
+example::task<void>void my_main(example::mutex& mtx) {
+	example::task<void> tsk = work(mtx);
+	std::cout << "post section" << std::endl;
+	co_await tsk;
+}
+
+```
+
+In this case, executing `my_main` results in the following:
+
+**Thread #1**:
+- Entering `my_main`
+	- Entering `work` @ function preamble
+		- Executing *init section*
+		- Suspend coroutine `work` (assuming mutex not free)
+	- Return control to `my_main`
+	- Executing *post section*
+	- Suspend coroutine `my_main` (assuming `work` has not finished yet on another thread)
+- Return control to caller of `my_main`
+
+**Thread #2** (some time later...):
+- Unlock mutex
+- Entering `work` @ after `co_await mtx`
+	- Executing *critical section*
+	- Returning control to caller and specifying next coroutine to run
+- Entering `my_main` @ after `co_await tsk`
+- Return control to caller in thread #2
+
+The application now may print (as described above):
+```
+init section
+post section
+critical section
+```
+
+But could also print, given different thread interleavings:
+```
+init section
+critical section
+post section
+```
+
+This looks rather complicated, but fortunately we can simplify it with a simple assumption: when you call `work(mtx)`, you have to assume it's running asynchronously in another thread as `my_main` immediately continues. Since, as a consequence, you don't know when `work`'s results are actually available, you have to synchronize by `co_await`ing it.
+
+It's important to understand that `work` may or may not in fact be running in another thread, and the only purpose of this mental model is to understand where you have ordering guarantees in your code. Coroutine libraries allow you to fine tune which threads execute which coroutines.
+
+Regarding the suspension of coroutines, it's different than suspending threads. When you suspend a thread, the operating system saves its state and puts it into a pile for later resumption. When you suspend a coroutine, it's the compiler's runtime library that saves its state, and the coroutine library you're using that puts it into a pile for later resumption. A suspended coroutine can subsequently be resumed on any thread, not just the one that suspended it. When you suspend a coroutine, the operating system does not suspend the thread that was executing your coroutine.
+
+In C++, you can suspend a coroutine only at specific locations called *suspension points*. These locations correspond to `co_await` and `co_yield` statements in the coroutine's body. Additionally, all coroutines have an initial and a final suspension point, but those are mainly important for coroutine library developers.
+
+### Thinking in coroutines
+
+If you're a seasoned developer in procedural programming languages, you might be tempted to think about coroutines as special functions that can be suspended mid-execution and have a fancy return value. I think a better approach is to look at functions as a specialization of coroutines instead. In light of that, you can sketch up the following hierarchy:
+
+- Coroutine: a block of stateful, standalone code, that can be suspended at specific points
+	- Function: a special coroutine that has no suspension points
+	- Task: a coroutine that returns one value, defined using the `task<T>` return type
+	- Generator: a coroutine that yields multiple values, defined using the `generator<T>` return type
+
+This way, it's fairly easy to plug new subclasses of coroutines, like streams, into your mental model.
+
+## Using asyncpp
+
+### <a name="feature_task"></a> Task & shared_task
+
+Tasks are coroutines that can `co_await` other tasks and `co_return` a single value:
+
+```c++
+// A compute-heavy asynchronous computation.
+task<float> det(float a, float b, float c) {
+	co_return std::sqrt(b*b - 4*a*c);
+}
+
+// An asynchronous computation that uses the previous one.
+task<float> solve(float a, float b, float c) {
+	task<float> computation = det(a, b, c); // Launch the async computation.
+	const float d = co_await computation; // Wait for the computation to complete.
+	co_return (-b + d) / (2 * a); // Once complete, process the results.
+}
+```
+
+In `asyncpp`, tasks are lazy, meaning that they don't start executing until you `co_await` them. You can also force a task to start executing using `launch`:
+
+```c++
+task<void> t1 = work(); // Lazy, does not start.
+task<void> t2 = launch(work()); // Eager, does start.
+```
+
+Tasks come in two flavours:
+1. `task`:
+	- Movable
+	- Not copyable
+	- Can only be `co_await`ed once
+2. `shared_task`:
+	- Movable
+	- Copyable: does not launch multiple coroutines, just gives you multiple handles to the result
+	- Can be `co_await`ed any number of times
+		- Repeatedly in the same thread
+		- Simultaneously from multiple threads: each thread must have its own copy!
+
+
+### <a name="feature_generator"></a> Generator
+
+Generator can generate multiple values using `co_yield`, this is what sets them apart from tasks that can generate only one result. The generator below generates an infinite number of results:
+
+```c++
+generator<int> iota() {
+	int value = 0;
+	while (true) {
+		co_yield value++;
+	}
+}
+```
+
+To access the sequence of generated values, you can use iterators:
+
+```c++
+// Prints numbers 1 to 100
+generator<int> g = iota();
+auto it = g.begin();
+for (int index = 0; index < 100; ++index, ++it) {
+	std::cout << *it << std::endl;
+}
+```
+
+You can also take advantage of C++20 ranges:
+
+```c++
+// Prints numbers 1 to 100
+for (const auto value : iota() | std::views::take(100)) {
+	std::cout << value << std::endl;
+}
+```
+
+Unlike tasks, generators are always synchronous, so they run on the current thread when you advance the iterator, and you don't have to await them.
+
+
+### <a name="feature_stream"></a> Stream
+
+Streams are a mix of tasks and generators: like generators, they can yield multiple values, but like tasks, you have to await each value. You can think of a stream as a `generator<task<T>>`, but with a simpler interface and a more efficient implementation. Like tasks, streams are also asynchronous, and can be set to run on another thread.
+
+The `iota` function looks the same when implemented as a `stream`:
+
+```c++
+stream<int> iota() {
+	int value = 0;
+	while (true) {
+		co_yield value++;
+	}
+}
+```
+
+The difference is in how you access the yielded elements:
+
+```c++
+auto s = iota();
+while (const auto it = co_await s) {
+	std::cout << *it << std::endl;
+}
+```
+
+You can `co_await` the stream object multiple times, and each time it will give you an "iterator" to the latest yielded value. Before retrieving the value from the iterator, you have to verify if it's valid. An invalid iterator signals the end of the stream.
+
+
+### <a name="feature_event"></a> Event & broadcast_event
+
+Events allow you to signal the completion of an operation in one task to another task:
+
+```c++
+task<void> producer(std::shared_ptr<event<int>> evt) {
+	evt->set_value(100);
+}
+
+task<void> consumer(std::shared_ptr<event<int>> evt) {
+	std::cout << (co_await *evt) << std::endl;
+}
+
+const auto event = std::make_shared<event<int>>();
+launch(producer(event));
+launch(consumer(event));
+```
+
+The relationship between `event` and `broadcast_event` is similar to that of `task` and `shared_task`: you can await an `event` only once, and only from one thread at the same time, but you can await a `broadcast_event` multiple times without thread-safety concerns. It's important to note that both `event` and `broadcast_event` are neither movable nor copyable.
+
+While events can be useful on their own, they can also be used to implement higher level primitives, such as the usual `std::promise / std::future` pair. In fact, `task` and `shared_task` are implemented using `event` and `broadcast_event`, respectively.
+
+
+### <a name="feature_mutex"></a> Mutex & shared_mutex
+
+Mutexes and shared mutexes in asyncpp are virtually equivalent to their standard library counterparts, but they are tailored for coroutine contexts.
+
+The interfaces have been slightly modified to make them suitable for coroutines:
+
+```c++
+task<void> lock_mutex(mutex& mtx) {
+	co_await mtx; // Locks the mutex.
+	mtx.unlock();
+}
+
+task<void> lock_shared_mutex(shared_mutex& mtx) {
+	// Lock exclusively:
+	co_await mtx.exclusive();
+	mtx.unlock();
+	// Lock shared:
+	co_await mtx.shared();
+	mtx.unlock_shared();
+}
+```
+
+`asyncpp` also comes with its own `unique_lock` and `shared_lock` that help you manage mutexes in an RAII fashion:
+
+```c++
+task<void> lock_mutex(mutex& mtx) {
+	unique_lock lk(co_await mtx); // Locks the mutex.
+}
+
+task<void> lock_shared_mutex(shared_mutex& mtx) {
+	{
+		unique_lock lk(co_await mtx.exclusive());
+	}
+	{
+		shared_lock lk(co_await mtx.shared());
+	}
+}
+```
+
+### <a name="feature_join"></a> Join
+
+To retrieve the result of a coroutine, we must `co_await` it, however, only a coroutine can `co_await` another one. Then how is it possible to wait for a coroutine's completion from a plain old function? For this purpose, `asnyncpp` provides `join`:
+
+```c++
+#include <asyncpp/join.hpp>
+
+using namespace asyncpp;
+
+task<int> coroutine() {
 	co_return 0;
 }
+
+int main() {
+	return join(coroutine());
+}
 ```
 
-Retrieving the result:
+Join uses OS thread-synchronization primitives to block the current thread until the coroutine is finished. Join can be used for anything that can be `co_await`ed: tasks, streams, events, and even mutexes.
+
+
+### <a name="feature_sleep"></a> Sleeping
+
+Just like with mutexes, you shouldn't use threading primitives like `std::this_thread::sleep_for` inside coroutines. As a replacement, `asyncpp` provides a coroutine-friendly `sleep_for` and `sleep_until` method:
+
 ```c++
-auto future_value = my_coro();
-int value = co_await future_value;
+task<void> sleepy() {
+	co_await sleep_for(20ms);
+}
 ```
 
+Sleeping is implemented by a background thread that manages a priority queue of coroutines that have been put to sleep. The background thread then uses the operating system's sleep functions to wait until the next coroutine has to be awoken. It then awakes that coroutine, and goes back to sleep until the next one. There is not busy loop that wastes CPU power.
 
-#### <a name="usage_shared_task"></a>Using `shared_task<T>`
+### <a name="feature_scheduler"></a> Schedulers
 
+Think about the following code:
 
-`task<T>` works similarly to `std::shared_future<T>`:
-- It returns one value
-- Can be copied
-- Can be awaited any number of times from the same or different threads
-
-The interface is the same as `task<T>`.
-
-
-#### <a name="usage_generator"></a>Using `generator<T>`
-
-Generators allow you to write a coroutine that generates a sequence of values:
 ```c++
-generator<int> my_sequence(int count) {
-	for (int i=0; i<count; ++i) {
-		co_yield i;
+task<measurement> measure() {
+	co_return heavy_computation();
+}
+
+task<report> analyze() {
+	auto t = measurement(); // This line doesn't do any heavy computation because tasks are lazy.
+	const auto m = co_await t; // This line does the heavy computation.
+	co_return make_report(m);
+}
+```
+
+This code may be asynchronous, but it does **not** use multiple threads. To achieve that, we are going to need schedulers, for example a `thread_pool`:
+
+```c++
+task<measurement> measure() {
+	co_return heavy_computation();
+}
+
+task<report> analyze(thread_pool& sched) {
+	auto t = launch(measurement(), sched); // Execution of the heavy computation will start on the thread pool ASAP.
+	const auto m = co_await t; // We suspend until the thread pool finished the heavy computation.
+	co_return make_report(m); // We countinue as soon as the results are available.
+}
+```
+
+`launch` can optionally take a second argument, which is the scheduler that the coroutine will run on. In this case, it is the thread pool, and the coroutine will be assigned to any if its threads.
+
+Let's assume that we did not specify a scheduler for `analyze`, even though `measure` is running on the thread pool. In this case, when `measure` is finished, as the thread pool's thread returns control to the caller of `measure`, that is, `analyze`, it will cause `analyze`'s second part to also run on the thread pool.
+
+However, if you specify a scheduler for both `analyze` and `measure`, they will at all times respect their target schedulers. As such, `analyze`s second part is guaranteed to run on `analyze`'s scheduler, even if `measure` runs on the thread pool.
+
+#### <a name="feature_thread_pool"></a> Thread_pool
+
+The thread pool is currently the only scheduler in `asyncpp`. It's a traditional thread pool with multiple threads that wait and execute coroutines when they become ready for execution. The thread pool uses work stealing to dynamically distribute the workload. When saturated with tasks, the thread pool incurs no synchronization overhead and is extremely fast.
+
+
+### <a name="feature_allocator"></a> Allocator awareness
+
+`asyncpp`'s coroutines are allocator aware in the same fashion as described in the [proposal for generators](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2021/p2502r0.pdf).
+
+This means that you can specify the allocator used for dynamically allocating the coroutine's promise using a template parameter:
+
+```c++
+namespace asyncpp::pmr {
+template <class T>
+using task<T> = asyncpp::task<T, std::pmr::polymorphic_allocator<>>;
+}
+```
+
+Since there is no other way of passing data to the coroutine's creation than the parameter list, you have to include the allocator there. To differentiate the allocator argument from other, generic arguments, you have to pass it first, prepended by `std::allocator_arg`, like so:
+
+```c++
+pmr::task<int> coroutine(std::allocator_arg_t, std::pmr::polymorphic_allocator<>, int a, int b) {
+	co_return a + b;
+}
+```
+
+Just like in the generator proposal, type-erased allocators are supported via setting the allocator template parameter to `void`. The code below will function the exact same way as the previous snippet:
+
+```c++
+task<int, /* Alloc = */ void> coroutine(std::allocator_arg_t, std::pmr::polymorphic_allocator<>, int a, int b) {
+	co_return a + b;
+}
+```
+
+The need for specifying allocators come from the fact that coroutines have to do dynamic allocation on creation, as their body's state cannot be placed on the stack, it must be placed on the heap to survive suspension and possible moves to another thread. Allocators help you control how exactly the coroutine's state will be allocated. (Note: compilers may do a Heap Allocation eLimination Optimization (HALO) to avoid allocations altogether, but `asyncpp`'s coroutines use a design for parallelism that is difficult to optimize for the compilers.)
+
+
+### <a name="feature_integration"></a> Integration with other coroutine libraries
+
+If `asyncpp` does not provide all that you need, but neither does another coroutine library that you considered using, it might seem like a good idea to combine the two.
+
+Combining coroutine libraries is surprisingly easy to do: since they all have to conform to a strict interface provided by the compiler, they are largely interoperable and you can just mix and match primitives. While mixing is not that likely to render your code completely broken, it can introduce some unexpected side effects.
+
+#### Example: using coro::mutex (libcoro) in an asyncpp::task
+
+```c++
+asyncpp::task<void> coroutine(coro::mutex& mutex) {
+	coro::scoped_lock lk = co_await mutex;
+	// Do work inside critical section...
+}
+```
+
+This code will execute correctly, but with a caveat: if you have bound `coroutine` to an `asyncpp::scheduler`, `libcoro` will not respect that, and `coroutine` will **not** be continued on the bound scheduler, but rather on whichever thread unlocked the mutex.
+
+
+#### Example: awaiting an `asyncpp::event` from a `coro::task`
+
+```c++
+coro::task<void> coroutine(asyncpp::event<void>& evt) {
+	co_await evt;
+}
+```
+
+This code will not actually compile, because `asyncpp`'s primitives can only be awaited by coroutines that implement `asyncpp`'s `resumable_promise` interface, which `libcoro`'s `task` obviously does not. While this limitation, or feature, whichever you think it is, could be relaxed, there are no current plans for it.
+
+If this code actually compiled, it would likely work exactly as expected.
+
+
+### <a name="feature_extension"></a> Extending asyncpp
+
+As `asyncpp` has its own little ecosystem that consist of a few interfaces, extending asyncpp is as easy as implementing those interfaces, and they will cooperate seemlessly with the rest of `asyncpp`.
+
+#### Adding a new coroutine
+
+To implement a new coroutine like `task`, `generator`, or `stream`, your coroutine's promise has to satisfy the following interfaces:
+
+```c++
+#include <asyncpp/promise.hpp>
+
+class my_coroutine {
+	struct my_promise 
+		: asyncpp::resumable_promise,
+		  asyncpp::schedulable_promise,
+		  asyncpp::allocator_aware_promise<Alloc>,
+	{
+		void resume() override; // resumable_promise
+		void resume_now() override; // schedulable_promise
+	};
+	// ...
+}
+```
+
+While all these interfaces are optional to implement, you may miss out on specific functionality if you don't implement them:
+- `resumable_promise` gives you control over how your coroutine is resumed from a suspended state. Typically, you can either resume the coroutine immediately, or enqueue it on a scheduler. This interface is required for your coroutine to be able to `co_await` `asyncpp` primitives.
+- `schedulable_promise` enables schedulers to resume a coroutine immediately on the current thread. You have to implement this interface in order to bind your coroutine to an asyncpp scheduler.
+- `allocator_aware_promise` makes your promise support allocators. It's more of a mixin than an interface, you don't have to implement anything. It's also completely optional.
+
+#### Adding a new scheduler
+
+```c++
+#include <asyncpp/scheduler.hpp>
+
+class my_scheduler : public asyncpp::scheduler {
+public:
+	void schedule(asyncpp::schedulable_promise& promise) override {
+		promise.resume_now();
 	}
-}
+};
 ```
 
-Retrieving the values:
+This scheduler will just resume the scheduled promise on the current thread immediately.
+
+#### Adding a new synchronization primitive
+
 ```c++
-auto sequence = my_sequence(5);
-for (int value : sequence) {
-	f(value);
-}
-```
+#include <asyncpp/promise.hpp>
 
+struct my_primitive {
+	asyncpp::resumable_promise* m_enclosing = nullptr;
 
-#### <a name="usage_stream"></a>Using `stream<T>`
+	bool await_ready(); // Implement as you wish.
 
-Streams work similarly to generators, but they may run asynchronously so you have to await the results.
-
-Defining a stream:
-```c++
-stream<int> my_sequence(int count) {
-	for (int i=0; i<count; ++i) {
-		co_yield i;
+	// Make sure you give special treatment to resumable_promises.
+	template <std::convertible_to<const asyncpp::resumable_promise&> Promise>
+	bool await_suspend(std::coroutine_handle<Promise> enclosing) {
+		// Store the promise that's awaiting my_primitive.
+		// Later, you should resume it using resumable_promise::resume().
+		m_enclosing = &enclosing.promise();
 	}
+
+	void await_resume(); // Implement as you wish.
+
 }
 ```
 
-Retrieving the values:
-```c++
-auto sequence = my_sequence(5);
-while (auto value = co_await sequence) {
-	f(*value);
-}
-```
+When you have await this synchronization primitive, you have the opportunity to store the awaiting coroutine's handle. If the awaiting coroutine is an `asyncpp` coroutine, it will have the `resumable_promise` interface implemented, and you should give it special treatment: instead of simply resuming the coroutine handle, you should use the `resumable_promise`'s `resume` method, which will take care of using the proper scheduler.
 
 
-### <a name="sync_primitives"></a>Synchronization primitives
+## Contributing
 
-asyncpp implements the following synchronization primitives:
-- synchronization primitives:
-	- [mutex](#usage_mutex)
-	- [shared_mutex](#usage_shared_mutex)
-	- [unique_lock](#usage_unique_lock)
-	- [shared_lock](#usage_shared_lock)
+### Adding features
 
+Check out the section of the documentation about extending `asyncpp`. This should provide make adding a new feature fairly straightforward.
 
-#### <a name="usage_mutex"></a>Using `mutex`
+Multi-threaded code is notoriously error-prone, therefore proper tests are expected for every new feature. `asyncpp` comes with a mini framework to exhaustively test multi-threaded code by running all possible orderings. Interleaved tests should be present when applicable. Look at existing tests for reference.
 
-Mutexes have a similar interface to `std::mutex`, except they don't have a `lock` method. Instead, you have to `co_await` them:
+Strive to make code as short and simple as possible, and break it down to pieces as small as possible. This helps both with testing and makes it easier to reason about the code, which is of utmost important with multi-threaded code.
 
-```c++
-mutex mtx;
-const bool locked = mtx.try_lock();
-if (!locked) {
-	co_await mtx; // Same as co_await mtx.unique()
-}
-mtx.unlock();
-```
+### Reporting bugs
 
+You can always open an issue if you find a bug. Please provide as much detail as you can, including source code to reproduce, if possible. Multi-threaded bugs are difficult to reproduce so all information available will likely be necessary.
 
-#### <a name="usage_shared_mutex"></a>Using `shared_mutex`
+## Acknowledgment
 
-Mutexes have a similar interface to `std::shared_mutex`, except they don't have a `lock` method. Instead, you have to `co_await` them:
-
-```c++
-mutex mtx;
-const bool locked = mtx.try_lock_shared();
-if (!locked) {
-	co_await mtx.shared();
-}
-mtx.unlock_shared();
-```
-
-
-#### <a name="usage_unique_lock"></a>Using `unique_lock`
-
-Similar to `std::unique_lock`, but adapter to dealing with coroutines.
-
-```c++
-mutex mtx;
-unique_lock lk(mtx); // Does NOT lock the mutex
-unique_lock lk(co_await mtx); // Does lock the mutex
-lk.unlock(); // Unlocks the mutex
-lk.try_lock(); // Tries to lock the mutex
-co_await lk; // Lock the mutex
-```
-
-#### <a name="usage_shared_lock"></a>Using `shared_lock`
-
-Works similarly to `unique_lock`, but locks the mutex in shared mode.
-
-
-### <a name="usage_schedulers"></a>Using schedulers
-
-Coroutines (except generator) can be made to run by a scheduler using `bind`:
-
-```c++
-thread_pool sched;
-task<int> my_task = my_coro();
-bind(my_task, sched);
-```
-
-When a coroutine is bound to a scheduler, it will always run on that scheduler, no matter if it's resumed from another scheduler. This allows you to create schedulers whose threads have a specific affinity or priority, and you can be sure your tasks run only on those threads. A task that is not bound will run synchronously.
-
-
-Some coroutines are only started when you `co_await` them, however, other can be launched asynchronously before retrieving the results. This is done using `launch`:
-
-```c++
-task<int> my_task = my_coro();
-// Launching on whatever scheduler it's bound to:
-launch(my_task);
-// Launching on a specific scheduler:
-thread_pool sched;
-launch(my_task, sched);
-```
-
-Launching coroutines before `co_await`-ing them is useful to create actual parallelism. This way, you can make callees execute on a thread pool in parallel to each other and the caller, and only then get their results. Simply using `co_await` will respect the bound scheduler of the callee, but it cannot introduce parallelism as there is only ever on task you can await.
-
-There is a shorthand forwarding version of both functions:
-
-```c++
-task<int> my_task = bind(my_coro(), sched);
-task<int> my_task = launch(my_coro(), sched);
-```
-
-
-### <a name="sync_join"></a>Synchronizing coroutines and functions
-
-Normally, coroutines can only be `co_await`-ed. Since you cannot `co_await` in regular functions, you have to use `join` to retrieve the results of a coroutine:
-
-```c++
-task<int> my_task = launch(my_coro(), sched);
-int result = join(my_task);
-```
-
-Note that this can also be used for any other primitives:
-
-```c++
-mutex mtx;
-join(mtx); // Acquires the lock
-mtx.unlock();
-```
-
-In this case, `mutex` works just like `std::mutex`, but you lose all the advantages of coroutines.
-
-
-### <a name="extending_asyncpp"></a>Interfacing with other coroutine libraries
-
-#### Existing libraries
-
-asyncpp's coroutines can `co_await` other coroutines, however, the scheduling will be partially taken over by the other library, meaning asyncpp's coroutines won't anymore respect their bound schedulers.
-
-Other coroutines cannot currently co_await asyncpp's coroutines. This is because asyncpp coroutines expect awaiting coroutines to have a `resumable_promise`. This restriction could be potentially lifted, however, other coroutines would be treated by asyncpp as having no bound scheduler and run synchronously.
-
-#### Building on top of asyncpp
-
-All asyncpp coroutines have a promise type that derives from `resumable_promise`. This way, whenever a coroutine is resumed, the exact way to resume it is delegated to the coroutine's promise rather than executed by the caller. This allows coroutines to retain their agency over when, where and how they run, and stay on the schedulers they have been bound to.
-
-To extend asyncpp, all you need to do is make your promises implement `resumable_promise`. If you want your coroutines to be schedulable, you have to implement `schedulable_promise`. Such coroutines should seamlessly fit into asyncpp.
-
+I've used [libcoro](https://github.com/jbaldwin/libcoro) as well as [cppcoro](https://github.com/lewissbaker/cppcoro) for inspiration.
 
 ## License
 
-asyncpp is distributed under the MIT license, therefore can be used in commercial and non-commercial projects alike with very few restrictions.
+`asyncpp` is distributed under the MIT license, therefore can be used in commercial and non-commercial projects alike with very few restrictions.
 
 
 
