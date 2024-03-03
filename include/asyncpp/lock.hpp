@@ -69,7 +69,8 @@ class unique_lock {
     };
 
 public:
-    unique_lock(Mutex& mtx) noexcept : m_mtx(&mtx) {}
+    unique_lock(Mutex& mtx, std::defer_lock_t) noexcept : m_mtx(&mtx), m_owned(false) {}
+    unique_lock(Mutex& mtx, std::adopt_lock_t) noexcept : m_mtx(&mtx), m_owned(true) {}
     unique_lock(locked_mutex<Mutex>&& lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
     unique_lock(unique_lock&& rhs) noexcept : m_mtx(rhs.m_mtx), m_owned(rhs.m_owned) {
         rhs.m_mtx = nullptr;
@@ -153,7 +154,8 @@ class shared_lock {
     };
 
 public:
-    shared_lock(Mutex& mtx) noexcept : m_mtx(&mtx) {}
+    shared_lock(Mutex& mtx, std::defer_lock_t) noexcept : m_mtx(&mtx), m_owned(false) {}
+    shared_lock(Mutex& mtx, std::adopt_lock_t) noexcept : m_mtx(&mtx), m_owned(true) {}
     shared_lock(locked_mutex_shared<Mutex> lk) noexcept : m_mtx(&lk.mutex()), m_owned(true) {}
     shared_lock(shared_lock&& rhs) noexcept : m_mtx(rhs.m_mtx), m_owned(rhs.m_owned) {
         rhs.m_mtx = nullptr;

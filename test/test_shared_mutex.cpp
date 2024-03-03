@@ -175,7 +175,7 @@ TEST_CASE("Shared mutex: unique lock try_lock", "[Shared mutex]") {
     shared_mutex mtx;
     scope_clear guard(mtx);
 
-    unique_lock lk(mtx);
+    unique_lock lk(mtx, std::defer_lock);
     REQUIRE(!lk.owns_lock());
 
     lk.try_lock();
@@ -188,7 +188,7 @@ TEST_CASE("Shared mutex: unique lock await", "[Shared mutex]") {
     shared_mutex mtx;
     scope_clear guard(mtx);
 
-    unique_lock lk(mtx);
+    unique_lock lk(mtx, std::defer_lock);
     auto monitor = lock(lk);
     REQUIRE(monitor.get_counters().done);
     REQUIRE(lk.owns_lock());
@@ -214,7 +214,7 @@ TEST_CASE("Shared mutex: unique lock unlock", "[Shared mutex]") {
     shared_mutex mtx;
     scope_clear guard(mtx);
 
-    unique_lock lk(mtx);
+    unique_lock lk(mtx, std::defer_lock);
     lk.try_lock();
     lk.unlock();
     REQUIRE(!lk.owns_lock());
@@ -227,7 +227,7 @@ TEST_CASE("Shared mutex: unique lock destructor", "[Shared mutex]") {
     scope_clear guard(mtx);
 
     {
-        unique_lock lk(mtx);
+        unique_lock lk(mtx, std::defer_lock);
         lk.try_lock();
     }
 
@@ -239,7 +239,7 @@ TEST_CASE("Shared mutex: shared lock try_lock", "[Shared mutex]") {
     shared_mutex mtx;
     scope_clear guard(mtx);
 
-    shared_lock lk(mtx);
+    shared_lock lk(mtx, std::defer_lock);
     REQUIRE(!lk.owns_lock());
 
     lk.try_lock();
@@ -252,7 +252,7 @@ TEST_CASE("Shared mutex: shared lock await", "[Shared mutex]") {
     shared_mutex mtx;
     scope_clear guard(mtx);
 
-    shared_lock lk(mtx);
+    shared_lock lk(mtx, std::defer_lock);
     auto monitor = lock(lk);
     REQUIRE(monitor.get_counters().done);
     REQUIRE(lk.owns_lock());
@@ -278,7 +278,7 @@ TEST_CASE("Shared mutex: shared lock unlock", "[Shared mutex]") {
     shared_mutex mtx;
     scope_clear guard(mtx);
 
-    shared_lock lk(mtx);
+    shared_lock lk(mtx, std::defer_lock);
     lk.try_lock();
     lk.unlock();
     REQUIRE(!lk.owns_lock());
@@ -291,7 +291,7 @@ TEST_CASE("Shared mutex: shared lock destructor", "[Shared mutex]") {
     scope_clear guard(mtx);
 
     {
-        shared_lock lk(mtx);
+        shared_lock lk(mtx, std::defer_lock);
         lk.try_lock();
     }
 

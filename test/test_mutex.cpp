@@ -94,7 +94,7 @@ TEST_CASE("Mutex: unique lock try_lock", "[Mutex]") {
     mutex mtx;
     scope_clear guard(mtx);
 
-    unique_lock lk(mtx);
+    unique_lock lk(mtx, std::defer_lock);
     REQUIRE(!lk.owns_lock());
 
     lk.try_lock();
@@ -107,7 +107,7 @@ TEST_CASE("Mutex: unique lock await", "[Mutex]") {
     mutex mtx;
     scope_clear guard(mtx);
 
-    unique_lock lk(mtx);
+    unique_lock lk(mtx, std::defer_lock);
     auto monitor = lock(lk);
     REQUIRE(monitor.get_counters().done);
     REQUIRE(lk.owns_lock());
@@ -133,7 +133,7 @@ TEST_CASE("Mutex: unique lock unlock", "[Mutex]") {
     mutex mtx;
     scope_clear guard(mtx);
 
-    unique_lock lk(mtx);
+    unique_lock lk(mtx, std::defer_lock);
     lk.try_lock();
     lk.unlock();
     REQUIRE(!lk.owns_lock());
@@ -146,7 +146,7 @@ TEST_CASE("Mutex: unique lock destructor", "[Mutex]") {
     scope_clear guard(mtx);
 
     {
-        unique_lock lk(mtx);
+        unique_lock lk(mtx, std::defer_lock);
         lk.try_lock();
     }
 
