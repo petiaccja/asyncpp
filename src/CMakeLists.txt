@@ -7,6 +7,7 @@ target_sources(asyncpp
 		shared_mutex.cpp
 		sleep.cpp
 		testing/interleaver.cpp
+		semaphore.cpp
 )
 
 target_link_libraries(asyncpp asyncpp-headers)
