@@ -10,6 +10,7 @@
 
 namespace asyncpp {
 
+
 class counting_semaphore {
     struct awaitable {
         counting_semaphore* m_owner = nullptr;
@@ -50,5 +51,12 @@ private:
     ptrdiff_t m_counter = 0;
     const ptrdiff_t m_max;
 };
+
+
+class binary_semaphore : public counting_semaphore {
+public:
+    binary_semaphore(bool is_free = false) : counting_semaphore(ptrdiff_t(is_free), 1) {}
+};
+
 
 } // namespace asyncpp
