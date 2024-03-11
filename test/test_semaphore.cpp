@@ -7,8 +7,8 @@
 using namespace asyncpp;
 
 
-struct [[nodiscard]] scope_clear {
-    ~scope_clear() {
+struct [[nodiscard]] sema_scope_clear {
+    ~sema_scope_clear() {
         sema._debug_clear();
     }
     counting_semaphore& sema;
@@ -39,7 +39,7 @@ TEST_CASE("Semaphore - try_acquire", "[Semaphore]") {
 TEST_CASE("Semaphore - acquire direct immediate", "[Semaphore]") {
     SECTION("success") {
         counting_semaphore sema(1);
-        scope_clear guard(sema);
+        sema_scope_clear guard(sema);
         auto monitor = acquire(sema);
         REQUIRE(monitor.get_counters().done);
         REQUIRE(sema._debug_get_awaiters().empty());
@@ -47,7 +47,7 @@ TEST_CASE("Semaphore - acquire direct immediate", "[Semaphore]") {
     }
     SECTION("failure") {
         counting_semaphore sema(0);
-        scope_clear guard(sema);
+        sema_scope_clear guard(sema);
         auto monitor = acquire(sema);
         REQUIRE(!monitor.get_counters().done);
         REQUIRE(!sema._debug_get_awaiters().empty());
@@ -59,7 +59,7 @@ TEST_CASE("Semaphore - acquire direct immediate", "[Semaphore]") {
 TEST_CASE("Semaphore - acquire spurious immediate", "[Semaphore]") {
     SECTION("success") {
         counting_semaphore sema(1);
-        scope_clear guard(sema);
+        sema_scope_clear guard(sema);
 
         auto monitor = []() -> monitor_task { co_return; }();
         auto awaiter = sema.operator co_await();
@@ -70,7 +70,7 @@ TEST_CASE("Semaphore - acquire spurious immediate", "[Semaphore]") {
     }
     SECTION("failure") {
         counting_semaphore sema(0);
-        scope_clear guard(sema);
+        sema_scope_clear guard(sema);
 
         auto monitor = []() -> monitor_task { co_return; }();
         auto awaiter = sema.operator co_await();
