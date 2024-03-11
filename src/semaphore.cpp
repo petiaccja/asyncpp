@@ -12,7 +12,11 @@ bool counting_semaphore::awaitable::await_ready() const noexcept {
 }
 
 
-counting_semaphore::counting_semaphore(ptrdiff_t current_counter, ptrdiff_t max_counter) noexcept : m_counter(current_counter), m_max(max_counter) {}
+counting_semaphore::counting_semaphore(ptrdiff_t current_counter, ptrdiff_t max_counter) noexcept : m_counter(current_counter), m_max(max_counter) {
+    assert(0 <= current_counter && current_counter <= max_counter);
+}
+
+
 bool counting_semaphore::try_acquire() noexcept {
     std::lock_guard lk(m_spinlock);
     if (m_counter > 0) {
