@@ -31,7 +31,7 @@ class counting_semaphore {
     };
 
 public:
-    counting_semaphore(ptrdiff_t current_counter = 0, ptrdiff_t max_counter = std::numeric_limits<ptrdiff_t>::max()) noexcept;
+    explicit counting_semaphore(ptrdiff_t current_counter = 0, ptrdiff_t max_counter = std::numeric_limits<ptrdiff_t>::max()) noexcept;
 
     bool try_acquire() noexcept;
     awaitable operator co_await() noexcept;
@@ -55,7 +55,7 @@ private:
 
 class binary_semaphore : public counting_semaphore {
 public:
-    binary_semaphore(bool is_free = false) : counting_semaphore(ptrdiff_t(is_free), 1) {}
+    explicit binary_semaphore(bool is_free = false) : counting_semaphore(static_cast<ptrdiff_t>(is_free), 1) {}
 };
 
 
