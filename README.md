@@ -21,6 +21,7 @@
 - [broadcast_event](#feature_event)
 - [mutex](#feature_mutex)
 - [shared_mutex](#feature_mutex)
+- [semaphores](#feature_semaphore)
 
 **Utilities**:
 - [join](#feature_join)
@@ -349,6 +350,31 @@ task<void> lock_shared_mutex(shared_mutex& mtx) {
 	}
 }
 ```
+
+### <a name="feature_semaphore"></a> Semaphores
+
+Semaphores are also very similar to their standard library counterparts. There is a `counting_semaphore` variant, where you can specify the maximum value of the semaphore's counter, and there is a `binary_semaphore` variant that specifies the maximum value to one.
+
+Usage of semaphores is similar to the standard library equivalent, but you need to use ˙co_await` to acquire the semaphore:
+
+```c++
+counting_semaphore sema(0, 16); // Counter may go up to 16, current value at 0.
+
+// A coroutine
+launch([](counting_semaphore& sema){
+	co_await sema;
+	std::cout << "This runs second." << std::endl;
+}(sema));
+
+// Another coroutine
+launch([](counting_semaphore& sema){
+	std::cout << "This runs first." << std::endl;
+	sema.release();
+}(sema));
+```
+
+Unlike the standard library semaphore, semaphores in `asyncpp` don't have an implementation defined upper limit for the counter so you can go up to `std::numeric_limits<ptrdiff_t>::max()`. In `asyncpp`, semaphores will also complain (via `std::terminate`) if you exceed the maximum value of the counter by releasing too many times.
+
 
 ### <a name="feature_join"></a> Join
 

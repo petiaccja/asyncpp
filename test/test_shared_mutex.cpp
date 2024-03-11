@@ -7,8 +7,8 @@
 using namespace asyncpp;
 
 
-struct [[nodiscard]] scope_clear {
-    ~scope_clear() {
+struct [[nodiscard]] shmtx_scope_clear {
+    ~shmtx_scope_clear() {
         mtx._debug_clear();
     }
     shared_mutex& mtx;
@@ -37,7 +37,7 @@ static monitor_task lock(shared_lock<shared_mutex>& lk) {
 
 TEST_CASE("Shared mutex: try lock", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     SECTION("exclusive") {
         REQUIRE(mtx.try_lock());
@@ -53,7 +53,7 @@ TEST_CASE("Shared mutex: try lock", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: lock direct immediate", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     SECTION("exclusive") {
         auto monitor = lock_exclusively(mtx);
@@ -70,7 +70,7 @@ TEST_CASE("Shared mutex: lock direct immediate", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: lock spurious immediate", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     SECTION("exclusive") {
         auto awaiter = mtx.exclusive();
@@ -96,7 +96,7 @@ TEST_CASE("Shared mutex: lock spurious immediate", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: sequencial locking attempts", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     SECTION("exclusive - exclusive") {
         REQUIRE(mtx.try_lock());
@@ -119,7 +119,7 @@ TEST_CASE("Shared mutex: sequencial locking attempts", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: unlock", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     SECTION("exclusive -> free") {
         mtx.try_lock();
@@ -173,7 +173,7 @@ TEST_CASE("Shared mutex: unlock", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: unique lock try_lock", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     unique_lock lk(mtx, std::defer_lock);
     REQUIRE(!lk.owns_lock());
@@ -186,7 +186,7 @@ TEST_CASE("Shared mutex: unique lock try_lock", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: unique lock await", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     unique_lock lk(mtx, std::defer_lock);
     auto monitor = lock(lk);
@@ -198,7 +198,7 @@ TEST_CASE("Shared mutex: unique lock await", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: unique lock start locked", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     auto monitor = [](shared_mutex& mtx) -> monitor_task {
         unique_lock lk(co_await mtx.exclusive());
@@ -212,7 +212,7 @@ TEST_CASE("Shared mutex: unique lock start locked", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: unique lock unlock", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     unique_lock lk(mtx, std::defer_lock);
     lk.try_lock();
@@ -224,7 +224,7 @@ TEST_CASE("Shared mutex: unique lock unlock", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: unique lock destructor", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     {
         unique_lock lk(mtx, std::defer_lock);
@@ -237,7 +237,7 @@ TEST_CASE("Shared mutex: unique lock destructor", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: shared lock try_lock", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     shared_lock lk(mtx, std::defer_lock);
     REQUIRE(!lk.owns_lock());
@@ -250,7 +250,7 @@ TEST_CASE("Shared mutex: shared lock try_lock", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: shared lock await", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     shared_lock lk(mtx, std::defer_lock);
     auto monitor = lock(lk);
@@ -262,7 +262,7 @@ TEST_CASE("Shared mutex: shared lock await", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: shared lock start locked", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     auto monitor = [](shared_mutex& mtx) -> monitor_task {
         shared_lock lk(co_await mtx.shared());
@@ -276,7 +276,7 @@ TEST_CASE("Shared mutex: shared lock start locked", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: shared lock unlock", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     shared_lock lk(mtx, std::defer_lock);
     lk.try_lock();
@@ -288,7 +288,7 @@ TEST_CASE("Shared mutex: shared lock unlock", "[Shared mutex]") {
 
 TEST_CASE("Shared mutex: shared lock destructor", "[Shared mutex]") {
     shared_mutex mtx;
-    scope_clear guard(mtx);
+    shmtx_scope_clear guard(mtx);
 
     {
         shared_lock lk(mtx, std::defer_lock);
