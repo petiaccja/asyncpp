@@ -8,31 +8,41 @@
 
 `asyncpp` is a C++20 coroutine library that enables you to write asynchronous and parallel code with a clean syntax.
 
-## Features
+## Introduction
 
-**Coroutines**:
-- [task](#feature_task)
-- [shared_task](#feature_task)
-- [generator](#feature_generator)
-- [stream](#feature_stream)
+### Compiler support
 
-**Synchronization primitives**:
-- [event](#feature_event)
-- [broadcast_event](#feature_event)
-- [mutex](#feature_mutex)
-- [shared_mutex](#feature_mutex)
-- [semaphores](#feature_semaphore)
+- MSVC (tested for 19.3+)
+- Clang (tested for 17+)
+- GCC (tested for 13+)
 
-**Utilities**:
-- [join](#feature_join)
-- [sleep_for, sleep_until](#feature_sleep)
+You can probably use anything that properly supports C++20, but the CI runs on rather recent versions of the three main compilers.
 
-**Schedulers**:
-- [Introduction](#feature_scheduler)
-- [thread_pool](#feature_thread_pool)
+### Features
 
-**Extra**:
-- [Allocator awareness](#feature_allocator)
+- **Coroutines**:
+	- [task](#feature_task)
+	- [shared_task](#feature_task)
+	- [generator](#feature_generator)
+	- [stream](#feature_stream)
+- **Synchronization**:
+	- [event](#feature_event)
+	- [broadcast_event](#feature_event)
+	- [mutex](#feature_mutex)
+	- [shared_mutex](#feature_mutex)
+	- [semaphores](#feature_semaphore)
+- **Utilities**:
+	- [join](#feature_join)
+	- [sleep_for, sleep_until](#feature_sleep)
+- **Schedulers**:
+	- [Scheduling in asyncpp](#feature_scheduler)
+	- [thread_pool](#feature_thread_pool)
+- **Other**:
+	- [Allocator awareness](#feature_allocator)
+
+
+### Extending `asyncpp`
+
 - [Integration with other coroutine libraries](#feature_integration)
 - [Extending asyncpp](#feature_extension)
 
