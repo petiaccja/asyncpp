@@ -34,3 +34,18 @@ TEST_CASE("Generator: sequence of references", "[Generator]") {
     }
     REQUIRE(values == std::vector{ 0, 2, 4, 6 });
 }
+
+
+TEST_CASE("Generator: sequence of mvoeables", "[Generator]") {
+    static const auto coro = [](int count) -> generator<std::unique_ptr<int>> {
+        for (int i = 0; i < count; ++i) {
+            co_yield std::make_unique<int>(i);
+        }
+    };
+    const auto g = coro(4);
+    std::vector<int> values;
+    for (auto& item : g) {
+        values.push_back(*item);
+    }
+    REQUIRE(values == std::vector{ 0, 1, 2, 3 });
+}

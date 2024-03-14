@@ -71,6 +71,17 @@ TEST_CASE("Stream: data types", "[Stream]") {
         }();
         REQUIRE(r.get_counters().done);
     }
+    SECTION("moveable") {
+        static const auto coro = []() -> stream<std::unique_ptr<int>> {
+            co_yield std::make_unique<int>(42);
+        };
+        auto r = []() -> monitor_task {
+            auto s = coro();
+            auto item = co_await s;
+            REQUIRE(**item == 42);
+        }();
+        REQUIRE(r.get_counters().done);
+    }
     SECTION("exception") {
         static const auto coro = []() -> stream<int> {
             throw std::runtime_error("test");

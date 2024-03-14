@@ -21,7 +21,7 @@ namespace impl_task {
             constexpr bool await_ready() const noexcept { return false; }
             void await_suspend(std::coroutine_handle<promise> handle) const noexcept {
                 auto& owner = handle.promise();
-                owner.m_event.set(owner.m_result);
+                owner.m_event.set(std::move(owner.m_result));
                 auto self = std::move(owner.m_self); // owner.m_self.reset() call method on owner after it's been deleted.
                 self.reset();
             }

@@ -149,7 +149,6 @@ TEMPLATE_TEST_CASE("Task: co_await ref", "[Task]", task<int&>, shared_task<int&>
 
 
 TEMPLATE_TEST_CASE("Task: co_await void", "[Task]", task<void>, shared_task<void>) {
-    static int value = 42;
     static const auto coro = []() -> TestType {
         co_return;
     };
@@ -158,6 +157,32 @@ TEMPLATE_TEST_CASE("Task: co_await void", "[Task]", task<void>, shared_task<void
     };
     auto task = enclosing();
     join(task);
+}
+
+
+TEST_CASE("Task: co_await moveable -- task", "[Task]") {
+    using TaskType = task<std::unique_ptr<int>>;
+    static const auto coro = [](std::unique_ptr<int> value) -> TaskType {
+        co_return value;
+    };
+    static const auto enclosing = [](std::unique_ptr<int> value) -> TaskType {
+        co_return co_await coro(std::move(value));
+    };
+    auto tsk = enclosing(std::make_unique<int>(42));
+    REQUIRE((*join(tsk)) == 42);
+}
+
+
+TEST_CASE("Task: co_await moveable -- shared_task", "[Task]") {
+    using TaskType = task<std::unique_ptr<int>>;
+    static const auto coro = [](std::unique_ptr<int> value) -> TaskType {
+        co_return value;
+    };
+    static const auto enclosing = [](std::unique_ptr<int> value) -> TaskType {
+        co_return std::move(co_await coro(std::move(value)));
+    };
+    auto tsk = enclosing(std::make_unique<int>(42));
+    REQUIRE((*join(tsk)) == 42);
 }
 
 
