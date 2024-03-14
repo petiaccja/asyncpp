@@ -47,7 +47,7 @@ namespace impl_stream {
 
         const T& operator*() const noexcept {
             assert(m_result);
-            return m_result.get();
+            return m_result.value();
         }
 
         const std::remove_reference_t<T>* operator->() const noexcept {
