@@ -85,7 +85,7 @@ TEST_CASE("Stream: data types", "[Stream]") {
 }
 
 
-TEST_CASE("Stream: destroy", "[Task]") {
+TEST_CASE("Stream: destroy", "[Stream]") {
     static const auto coro = []() -> stream<int> { co_yield 0; };
 
     SECTION("no execution") {
@@ -112,7 +112,7 @@ struct allocator_object {
 };
 
 
-TEST_CASE("Task: allocator erased", "[Task]") {
+TEST_CASE("Stream: allocator erased", "[Stream]") {
     monitor_allocator<> alloc;
     using stream_t = stream<monitor_allocator<>&>;
 
@@ -132,7 +132,7 @@ TEST_CASE("Task: allocator erased", "[Task]") {
 }
 
 
-TEST_CASE("Task: allocator explicit", "[Task]") {
+TEST_CASE("Stream: allocator explicit", "[Stream]") {
     monitor_allocator<> alloc;
     using stream_t = stream<monitor_allocator<>&, monitor_allocator<>>;
 
@@ -149,4 +149,46 @@ TEST_CASE("Task: allocator explicit", "[Task]") {
         REQUIRE(alloc.get_num_allocations() == 1);
         REQUIRE(alloc.get_num_live_objects() == 0);
     }
+}
+
+
+TEST_CASE("Stream: item operator bool", "[Stream]") {
+    SECTION("empty") {
+        impl_stream::item<int> item(std::nullopt);
+        REQUIRE(!item);
+    }
+    SECTION("valid") {
+        impl_stream::item<int> item(1);
+        REQUIRE(!!item);
+    }
+}
+
+
+TEST_CASE("Stream: item deref", "[Stream]") {
+    impl_stream::item<int> item(1);
+    REQUIRE(*item == 1);
+}
+
+
+TEST_CASE("Stream: item arrow", "[Stream]") {
+    struct data {
+        int value = 0;
+    };
+    impl_stream::item<data> item(data{ 1 });
+    REQUIRE(item->value == 1);
+}
+
+
+TEST_CASE("Stream: item const deref", "[Stream]") {
+    const impl_stream::item<int> item(1);
+    REQUIRE(*item == 1);
+}
+
+
+TEST_CASE("Stream: item const arrow", "[Stream]") {
+    struct data {
+        int value = 0;
+    };
+    const impl_stream::item<data> item(data{ 1 });
+    REQUIRE(item->value == 1);
 }
