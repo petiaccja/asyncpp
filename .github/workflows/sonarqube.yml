@@ -68,7 +68,7 @@ jobs:
 
       - name: Template coverage
         run: |
-          wget https://github.com/petiaccja/TemplateCoverage/releases/download/v1.2.0/TemplateCoverage_Linux_x86_64.zip
+          wget https://github.com/petiaccja/TemplateCoverage/releases/download/v1.3.0/TemplateCoverage_Linux_x86_64.zip
           unzip TemplateCoverage_Linux_x86_64.zip
           chmod +x ./TemplateCoverage_Linux_x86_64/template-coverage
           export RESOURCE_DIR=$(clang++ -print-resource-dir)
