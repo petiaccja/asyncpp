@@ -40,6 +40,7 @@ jobs:
           sudo update-alternatives --remove-all gcc || true
           sudo update-alternatives --remove-all g++ || true
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 10 --slave /usr/bin/g++ g++ /usr/bin/g++-13
+          sudo apt install lcov
   
       - name: Cache conan packages
         id: cache-conan
@@ -65,13 +66,20 @@ jobs:
         run: |
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build --preset conan-${{ env.conan_preset }}
 
+      - name: Template coverage
+        run: |
+          wget https://github.com/petiaccja/TemplateCoverage/releases/download/v1.1.0/TemplateCoverage_Linux_x86_64.zip
+          unzip TemplateCoverage_Linux_x86_64.zip
+          python3 ./TemplateCoverage_Linux_x86_64/run_on_compile_commands.py -p ${{github.workspace}}/${{env.conan_preset}} ./TemplateCoverage_Linux_x86_64/template-coverage -- --format=lcov --out-file=${{github.workspace}}/template_coverage.info
+
       - name: Test & code coverage
         working-directory: ${{github.workspace}}/build/${{ env.conan_preset }}/bin
         shell: bash
         run: |
           ./test --reporter junit --out ${{github.workspace}}/tests.xml
           llvm-profdata merge -sparse default.profraw -o coverage.profdata
-          llvm-cov show ./test -instr-profile=coverage.profdata > ${{github.workspace}}/coverage.txt
+          llvm-cov export -format=lcov -object ./test -instr-profile=coverage.profdata > ${{github.workspace}}/test_coverage.info
+          lcov -a ${{github.workspace}}/template_coverage.info -a ${{github.workspace}}/test_coverage.info -o ${{github.workspace}}/coverage.info
   
       - name: Run sonar-scanner
         env:
