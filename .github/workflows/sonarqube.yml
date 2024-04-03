@@ -27,6 +27,11 @@ jobs:
           version: "17.0"
           directory: ${{ runner.temp }}/llvm
       - run: pip install conan
+      - name: Setup .NET Core # Required to execute ReportGenerator
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 8.x
+          dotnet-quality: 'ga'
 
       - name: Install sonar-scanner and build-wrapper
         uses: SonarSource/sonarcloud-github-c-cpp@v2
@@ -80,9 +85,14 @@ jobs:
           ./test --reporter junit --out ${{github.workspace}}/tests.xml
           llvm-profdata merge -sparse default.profraw -o coverage.profdata
           llvm-cov export -format=lcov -object ./test -instr-profile=coverage.profdata > ${{github.workspace}}/test_coverage.info
-          pip install gcovr
-          gcovr -a ${{github.workspace}}/test_coverage.info -a ${{github.workspace}}/template_coverage.info --sonarqube ${{github.workspace}}/coverage.xml
-  
+        
+      - name: Merge coverage reports
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.2.4
+        with:
+          reports: template_coverage.info;test_coverage.info
+          targetdir: coverage
+          reporttypes: SonarQube
+
       - name: Run sonar-scanner
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
