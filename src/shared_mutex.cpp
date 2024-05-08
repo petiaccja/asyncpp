@@ -17,13 +17,13 @@ bool shared_mutex::shared_awaitable::await_ready() const noexcept {
 }
 
 
-locked_mutex<shared_mutex> shared_mutex::exclusive_awaitable::await_resume() const noexcept {
+exclusively_locked_mutex<shared_mutex> shared_mutex::exclusive_awaitable::await_resume() const noexcept {
     assert(m_owner);
     return { m_owner };
 }
 
 
-locked_mutex_shared<shared_mutex> shared_mutex::shared_awaitable::await_resume() const noexcept {
+shared_locked_mutex<shared_mutex> shared_mutex::shared_awaitable::await_resume() const noexcept {
     assert(m_owner);
     return { m_owner };
 }

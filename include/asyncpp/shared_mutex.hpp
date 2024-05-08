@@ -34,7 +34,7 @@ class shared_mutex {
             : basic_awaitable(owner, awaitable_type::exclusive) {}
 
         bool await_ready() const noexcept;
-        locked_mutex<shared_mutex> await_resume() const noexcept;
+        exclusively_locked_mutex<shared_mutex> await_resume() const noexcept;
     };
 
     struct shared_awaitable : basic_awaitable {
@@ -42,7 +42,7 @@ class shared_mutex {
             : basic_awaitable(owner, awaitable_type::shared) {}
 
         bool await_ready() const noexcept;
-        locked_mutex_shared<shared_mutex> await_resume() const noexcept;
+        shared_locked_mutex<shared_mutex> await_resume() const noexcept;
     };
 
     bool add_awaiting(basic_awaitable* waiting);

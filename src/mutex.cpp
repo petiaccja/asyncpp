@@ -11,7 +11,7 @@ bool mutex::awaitable::await_ready() const noexcept {
 }
 
 
-locked_mutex<mutex> mutex::awaitable::await_resume() noexcept {
+exclusively_locked_mutex<mutex> mutex::awaitable::await_resume() noexcept {
     assert(m_owner);
     return { m_owner };
 }
