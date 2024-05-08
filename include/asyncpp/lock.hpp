@@ -22,10 +22,6 @@ public:
         return *m_mtx;
     }
 
-    static constexpr bool shared() noexcept {
-        return Shared;
-    }
-
 private:
     basic_locked_mutex(Mutex* mtx) : m_mtx(mtx) {}
     Mutex* m_mtx = nullptr;

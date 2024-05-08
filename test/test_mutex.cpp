@@ -103,12 +103,26 @@ TEST_CASE("Mutex: unique lock try_lock", "[Mutex]") {
 }
 
 
-TEST_CASE("Mutex: unique lock await", "[Mutex]") {
+TEST_CASE("Mutex: unique lock await immediate", "[Mutex]") {
     mutex mtx;
     mtx_scope_clear guard(mtx);
 
     unique_lock lk(mtx, std::defer_lock);
     auto monitor = lock(lk);
+    REQUIRE(monitor.get_counters().done);
+    REQUIRE(lk.owns_lock());
+    REQUIRE(mtx._debug_is_locked());
+}
+
+
+TEST_CASE("Mutex: unique lock await suspended", "[Mutex]") {
+    mutex mtx;
+    mtx_scope_clear guard(mtx);
+
+    unique_lock lk(mtx, std::defer_lock);
+    mtx.try_lock();
+    auto monitor = lock(lk);
+    mtx.unlock();
     REQUIRE(monitor.get_counters().done);
     REQUIRE(lk.owns_lock());
     REQUIRE(mtx._debug_is_locked());
@@ -151,4 +165,45 @@ TEST_CASE("Mutex: unique lock destructor", "[Mutex]") {
     }
 
     REQUIRE(!mtx._debug_is_locked());
+}
+
+
+TEST_CASE("Mutex: unique lock move ctor", "[Mutex]") {
+    mutex mtx;
+    mtx_scope_clear guard(mtx);
+
+    {
+        unique_lock lk(mtx, std::defer_lock);
+        lk.try_lock();
+        REQUIRE(mtx._debug_is_locked());
+        unique_lock copy{ std::move(lk) };
+        REQUIRE(!lk.owns_lock());
+        REQUIRE(mtx._debug_is_locked());
+    }
+
+    REQUIRE(!mtx._debug_is_locked());
+}
+
+
+TEST_CASE("Mutex: unique lock move assign", "[Mutex]") {
+    mutex mtx1;
+    mutex mtx2;
+    mtx_scope_clear guard1(mtx1);
+    mtx_scope_clear guard2(mtx2);
+
+    {
+        unique_lock lk1(mtx1, std::defer_lock);
+        unique_lock lk2(mtx2, std::defer_lock);
+        lk1.try_lock();
+        lk2.try_lock();
+        REQUIRE(mtx1._debug_is_locked());
+        REQUIRE(mtx2._debug_is_locked());
+        lk1 = std::move(lk2);
+        REQUIRE(!lk2.owns_lock());
+        REQUIRE(!mtx1._debug_is_locked());
+        REQUIRE(mtx2._debug_is_locked());
+    }
+
+    REQUIRE(!mtx1._debug_is_locked());
+    REQUIRE(!mtx2._debug_is_locked());
 }
