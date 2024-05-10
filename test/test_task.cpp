@@ -94,7 +94,7 @@ TEMPLATE_TEST_CASE("Task: interleaving abandon", "[Task]", task<int>, shared_tas
 
         TestType coro() {
             co_return 1;
-        };
+        }
 
         void task() {
             sched.resume();
