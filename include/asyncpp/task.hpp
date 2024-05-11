@@ -22,7 +22,7 @@ namespace impl_task {
             void await_suspend(std::coroutine_handle<promise> handle) const noexcept {
                 auto& owner = handle.promise();
                 owner.m_event.set(std::move(owner.m_result));
-                auto self = std::move(owner.m_self); // owner.m_self.reset() call method on owner after it's been deleted.
+                auto self = std::move(owner.m_self); // owner.m_self.reset() would call method on owner after it's been deleted.
                 self.reset();
             }
             constexpr void await_resume() const noexcept {}
