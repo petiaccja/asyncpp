@@ -43,3 +43,14 @@ TEST_CASE("Join: ref", "[Join]") {
     REQUIRE(result == 1);
     REQUIRE(&result == &value);
 }
+
+
+TEST_CASE("Join: exception", "[Join]") {
+    static const auto coro = []() -> task<void> {
+        throw std::runtime_error("test");
+        co_return;
+    };
+
+    auto t = coro();
+    REQUIRE_THROWS_AS(join(t), std::runtime_error);
+}
