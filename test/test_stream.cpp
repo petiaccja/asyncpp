@@ -1,8 +1,10 @@
+#include "helper_schedulers.hpp"
 #include "monitor_allocator.hpp"
 #include "monitor_task.hpp"
 
 #include <asyncpp/join.hpp>
 #include <asyncpp/stream.hpp>
+#include <testing/interleaver.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -106,6 +108,98 @@ TEST_CASE("Stream: destroy", "[Stream]") {
         auto s = coro();
         void(join(s));
     }
+}
+
+
+TEST_CASE("Stream: interleaving co_await", "[Stream]") {
+    struct scenario {
+        thread_locked_scheduler awaiter_sched;
+        thread_locked_scheduler awaited_sched;
+        stream<int> result;
+
+        scenario() {
+            constexpr auto awaited = []() -> stream<int> {
+                co_yield 1;
+            };
+            constexpr auto awaiter = [](stream<int> awaited) -> stream<int> {
+                const auto it = co_await awaited;
+                const auto value = *it;
+                co_yield value;
+            };
+
+            auto tmp = launch(awaited(), awaited_sched);
+            result = launch(awaiter(std::move(tmp)), awaiter_sched);
+        }
+
+        void awaiter() {
+            awaiter_sched.resume();
+            if (!result.ready()) {
+                INTERLEAVED_ACQUIRE(awaiter_sched.wait());
+                awaiter_sched.resume();
+            }
+            REQUIRE(1 == *join(result));
+            result = {};
+        }
+
+        void awaited() {
+            awaited_sched.resume();
+        }
+    };
+
+    INTERLEAVED_RUN(
+        scenario,
+        THREAD("awaited", &scenario::awaited),
+        THREAD("awaiter", &scenario::awaiter));
+}
+
+
+TEST_CASE("Stream: interleaving abandon", "[Stream]") {
+    struct scenario : testing::validated_scenario {
+        thread_locked_scheduler sched;
+        stream<int> result;
+
+        scenario() {
+            result = launch(coro(), sched);
+        }
+
+        stream<int> coro() {
+            co_yield 1;
+        }
+
+        void task() {
+            sched.resume();
+        }
+
+        void abandon() {
+            result = {};
+        }
+
+        void validate(const testing::path& path) override {}
+    };
+
+    INTERLEAVED_RUN(
+        scenario,
+        THREAD("task", &scenario::task),
+        THREAD("abandon", &scenario::abandon));
+}
+
+
+TEST_CASE("Task: abandon (not started)", "[Task]") {
+    static const auto coro = []() -> stream<int> {
+        co_return;
+    };
+    static_cast<void>(coro());
+}
+
+
+TEST_CASE("Task: abandon (mid execution)", "[Task]") {
+    static const auto coro = []() -> stream<int> {
+        co_yield 1;
+        co_yield 2;
+        co_return;
+    };
+    auto s = coro();
+    REQUIRE(1 == *join(s));
 }
 
 
