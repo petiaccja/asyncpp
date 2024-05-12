@@ -70,6 +70,8 @@ namespace impl_stream {
                 assert(owner.m_event);
                 assert(owner.m_result.has_value());
                 owner.m_event->set(std::move(owner.m_result));
+                auto self = std::move(owner.m_self); // owner.m_self.reset() would call method on owner after it's been deleted.
+                self.reset();
             }
 
             constexpr void await_resume() const noexcept {}
@@ -100,6 +102,22 @@ namespace impl_stream {
             m_result = std::nullopt;
         }
 
+        void start() noexcept {
+            if (!INTERLEAVED(m_started.test_and_set())) {
+                m_self.reset(this);
+                m_event.emplace();
+                resume();
+            }
+        }
+
+        void reset() noexcept {
+            INTERLEAVED(m_started.clear());
+        }
+
+        bool ready() const {
+            return m_event && m_event->ready();
+        }
+
         void resume() final {
             return m_scheduler ? m_scheduler->schedule(*this) : resume_now();
         }
@@ -121,6 +139,8 @@ namespace impl_stream {
         }
 
     private:
+        rc_ptr<promise> m_self;
+        std::atomic_flag m_started;
         std::optional<event<std::optional<wrapper_type<T>>>> m_event;
         task_result<std::optional<wrapper_type<T>>> m_result;
     };
@@ -148,6 +168,7 @@ namespace impl_stream {
 
         item<T> await_resume() {
             assert(m_awaited->has_event());
+            m_awaited->reset();
             return { m_base.await_resume() };
         }
     };
@@ -155,10 +176,9 @@ namespace impl_stream {
 
     template <class T, class Alloc>
     auto promise<T, Alloc>::await() noexcept {
-        m_event.emplace();
-        auto aw = awaitable<T, Alloc>(m_event->operator co_await(), rc_ptr(this));
-        resume();
-        return aw;
+        start();
+        assert(m_event);
+        return awaitable<T, Alloc>(m_event->operator co_await(), rc_ptr(this));
     }
 
 } // namespace impl_stream
@@ -178,6 +198,23 @@ public:
 
     auto operator co_await() const {
         return m_promise->await();
+    }
+
+    bool ready() const {
+        assert(valid());
+        return m_promise->ready();
+    }
+
+    void launch() {
+        assert(valid());
+        m_promise->start();
+    }
+
+    void bind(scheduler& scheduler) {
+        assert(valid());
+        if (m_promise) {
+            m_promise->m_scheduler = &scheduler;
+        }
     }
 
     bool valid() const {

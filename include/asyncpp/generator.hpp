@@ -63,24 +63,25 @@ namespace impl_generator {
         explicit iterator(promise_type* promise) : m_promise(promise) {}
 
         reference operator*() const {
-            assert(valid() && "iterator not dereferencable");
+            assert(dereferenceable() && "iterator not dereferencable");
             return m_promise->get_result().get_or_throw();
         }
 
         iterator& operator++() {
-            assert(valid() && "iterator not incrementable");
-            get_handle().resume();
+            assert(incrementable() && "iterator not incrementable");
+            m_promise->get_result().clear();
+            if (!get_handle().done()) {
+                get_handle().resume();
+            }
             return *this;
         }
 
-        iterator operator++(int) {
-            auto copy = *this;
+        void operator++(int) {
             ++*this;
-            return copy;
         }
 
         bool operator==(const iterator& rhs) const noexcept {
-            return (m_promise == rhs.m_promise) || (!valid() && !rhs.m_promise);
+            return (m_promise == rhs.m_promise) || (!incrementable() && !rhs.incrementable());
         }
 
         bool operator!=(const iterator& rhs) const noexcept {
@@ -88,8 +89,12 @@ namespace impl_generator {
         }
 
     private:
-        bool valid() const noexcept {
-            return m_promise && !get_handle().done();
+        bool dereferenceable() const noexcept {
+            return m_promise->get_result().has_value();
+        }
+
+        bool incrementable() const noexcept {
+            return m_promise && m_promise->get_result().has_value();
         }
 
         auto get_handle() const noexcept {
@@ -113,11 +118,10 @@ public:
 
     generator(promise_type* promise) : m_promise(promise) {}
     generator() = default;
-    generator(generator&& rhs) noexcept : m_promise(rhs.m_promise) { rhs.m_promise = nullptr; }
+    generator(generator&& rhs) noexcept : m_promise(std::exchange(rhs.m_promise, nullptr)) {}
     generator& operator=(generator&& rhs) noexcept {
         release();
-        m_promise = rhs.m_promise;
-        rhs.m_promise = nullptr;
+        m_promise = std::exchange(rhs.m_promise, nullptr);
         return *this;
     }
     generator(const generator&) = delete;
