@@ -8,7 +8,7 @@ compiler.runtime=dynamic
 os=Windows
 
 [options]
-asyncpp:shared=True
+asyncpp/*:shared=True
 
 [conf]
 tools.build:compiler_executables={'c': 'cl.exe', 'cpp': 'cl.exe' }
