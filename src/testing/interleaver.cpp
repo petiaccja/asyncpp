@@ -13,10 +13,6 @@
 namespace asyncpp::testing {
 
 
-constinit const thread_state thread_state::running = thread_state{ code::running };
-constinit const thread_state thread_state::blocked = thread_state{ code::blocked };
-constinit const thread_state thread_state::completed = thread_state{ code::completed };
-
 static_assert(std::atomic<thread_state>::is_always_lock_free);
 
 thread_local thread* thread::current_thread = nullptr;
@@ -33,7 +29,7 @@ void thread::resume() {
     const auto current_state = m_content->state.load();
     const auto current_suspension_point = current_state.get_suspension_point();
     assert(current_suspension_point && "thread must be suspended at a suspension point");
-    const auto next_state = current_suspension_point->acquire ? thread_state::blocked : thread_state::running;
+    const auto next_state = current_suspension_point->acquire ? thread_state::blocked() : thread_state::running();
     m_content->state.store(next_state);
 }
 
@@ -52,7 +48,7 @@ thread_state thread::get_state() const {
 
 void thread::suspend(const suspension_point& sp) {
     const auto prev_state = m_content->state.exchange(thread_state::suspended(sp));
-    assert(prev_state == thread_state::running || prev_state == thread_state::blocked);
+    assert(prev_state == thread_state::running() || prev_state == thread_state::blocked());
     while (m_content->state.load().is_suspended()) {
         // Wait.
     }
@@ -101,13 +97,13 @@ tree::stable_node& tree::previous(transition_node& node) {
 std::string dump(const swarm_state& state) {
     std::stringstream ss;
     for (const auto& th : state.thread_states) {
-        if (th == thread_state::completed) {
+        if (th == thread_state::completed()) {
             ss << "completed";
         }
-        else if (th == thread_state::blocked) {
+        else if (th == thread_state::blocked()) {
             ss << "blocked";
         }
-        else if (th == thread_state::running) {
+        else if (th == thread_state::running()) {
             ss << "running";
         }
         else {
@@ -206,7 +202,7 @@ bool is_stable(const std::vector<thread_state>& states) {
 
 
 bool is_unblocked(const std::vector<thread_state>& states) {
-    const auto num_blocked = std::ranges::count_if(states, [](const auto& state) { return state == thread_state::blocked; });
+    const auto num_blocked = std::ranges::count_if(states, [](const auto& state) { return state == thread_state::blocked(); });
     const auto num_suspended = std::ranges::count_if(states, [](const auto& state) { return state.is_suspended(); });
     if (num_blocked != 0) {
         return num_suspended != 0;
@@ -249,7 +245,7 @@ bool is_transitively_complete(const tree& tree, const tree::stable_node& node) {
         completed_paths.resize(swarm.thread_states.size(), false);
         for (size_t resumed = 0; resumed < swarm.thread_states.size(); ++resumed) {
             const auto& ts = swarm.thread_states[resumed];
-            if (ts == thread_state::completed || ts == thread_state::blocked) {
+            if (ts == thread_state::completed() || ts == thread_state::blocked()) {
                 completed_paths[resumed] = true;
             }
         }
@@ -287,7 +283,7 @@ path run_next_interleaving(tree& tree, std::span<std::unique_ptr<thread>> swarm)
         try {
             const auto state = swarm_state(stabilize(swarm));
             path.steps.push_back({ state, -1 });
-            if (std::ranges::all_of(state.thread_states, [](const auto& ts) { return ts == thread_state::completed; })) {
+            if (std::ranges::all_of(state.thread_states, [](const auto& ts) { return ts == thread_state::completed(); })) {
                 break;
             }
             for (size_t thread_idx = 0; thread_idx < swarm.size(); ++thread_idx) {

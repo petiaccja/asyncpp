@@ -11,3 +11,5 @@ target_sources(asyncpp
 )
 
 target_link_libraries(asyncpp asyncpp-headers)
+
+set_target_properties(asyncpp PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
