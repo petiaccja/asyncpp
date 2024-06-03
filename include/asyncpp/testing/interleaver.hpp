@@ -49,9 +49,9 @@ public:
         return thread_state{ static_cast<code>(reinterpret_cast<size_t>(&sp)) };
     }
 
-    static constinit const thread_state running;
-    static constinit const thread_state blocked;
-    static constinit const thread_state completed;
+    static constexpr thread_state running() { return thread_state{ code::running }; }
+    static constexpr thread_state blocked() { return thread_state{ code::blocked }; }
+    static constexpr thread_state completed() { return thread_state{ code::completed }; }
 
     code value = code::running;
 };
@@ -68,7 +68,7 @@ public:
             initialize_this_thread();
             INTERLEAVED("initial_point");
             func(std::forward<Args_>(args_)...);
-            m_content->state.store(thread_state::completed);
+            m_content->state.store(thread_state::completed());
         };
         m_content->thread = std::jthread(wrapper, std::forward<Args>(args)...);
     }
@@ -84,7 +84,7 @@ private:
 private:
     struct content {
         std::jthread thread;
-        std::atomic<thread_state> state = thread_state::running;
+        std::atomic<thread_state> state = thread_state::running();
     };
     std::unique_ptr<content> m_content = std::make_unique<content>();
     static thread_local thread* current_thread;

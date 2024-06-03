@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build_profile: [clang20d, clang20r, gcc20d, gcc20r, msvc20d, msvc20r]
+        build_profile: [clang20d, clang20r, gcc20d, gcc20r, msvc20d, msvc20r, msvc20ds]
         include:
           - build_profile: clang20d
             conan_preset: clang-20-debug
@@ -34,6 +34,9 @@ jobs:
             os: windows-latest
           - build_profile: msvc20r
             conan_preset: msvc-20-release
+            os: windows-latest
+          - build_profile: msvc20ds
+            conan_preset: msvc-20-debug
             os: windows-latest
 
     name: ${{ matrix.build_profile }}

@@ -84,8 +84,8 @@ TEST_CASE("Interleaver - next from transition node", "[Interleaver]") {
 
 TEST_CASE("Interleaver - is transitively complete", "[Interleaver]") {
     const std::vector initial = { thread_state::suspended(p1) };
-    const std::vector final = { thread_state::completed };
-    const std::vector blocked = { thread_state::blocked };
+    const std::vector final = { thread_state::completed() };
+    const std::vector blocked = { thread_state::blocked() };
 
     SECTION("empty root node") {
         tree t;
@@ -118,7 +118,7 @@ TEST_CASE("Interleaver - is transitively complete", "[Interleaver]") {
 TEST_CASE("Interleaver - mark complete", "[Interleaver]") {
     const std::vector at_p1 = { thread_state::suspended(p1) };
     const std::vector at_p2 = { thread_state::suspended(p2) };
-    const std::vector final = { thread_state::completed };
+    const std::vector final = { thread_state::completed() };
 
     tree t;
     auto& n1 = t.root();
@@ -136,11 +136,11 @@ TEST_CASE("Interleaver - mark complete", "[Interleaver]") {
 TEST_CASE("Interleaver - select resumed", "[Interleaver]") {
     const std::vector initial = { thread_state::suspended(p3), thread_state::suspended(p3) };
     const std::vector both_ready = { thread_state::suspended(p1), thread_state::suspended(p1) };
-    const std::vector left_ready = { thread_state::suspended(p1), thread_state::completed };
-    const std::vector right_ready = { thread_state::completed, thread_state::suspended(p1) };
-    const std::vector none_ready = { thread_state::completed, thread_state::completed };
-    const std::vector left_blocked = { thread_state::blocked, thread_state::suspended(p1) };
-    const std::vector right_blocked = { thread_state::suspended(p1), thread_state::blocked };
+    const std::vector left_ready = { thread_state::suspended(p1), thread_state::completed() };
+    const std::vector right_ready = { thread_state::completed(), thread_state::suspended(p1) };
+    const std::vector none_ready = { thread_state::completed(), thread_state::completed() };
+    const std::vector left_blocked = { thread_state::blocked(), thread_state::suspended(p1) };
+    const std::vector right_blocked = { thread_state::suspended(p1), thread_state::blocked() };
 
     tree t;
     auto& transition = t.next(t.root(), swarm_state(initial));
